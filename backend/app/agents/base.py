@@ -17,7 +17,11 @@ def call_agent(system_prompt: str, user_message: str, model: str = "claude-sonne
             system=system_prompt,
             messages=[{"role": "user", "content": user_message}],
         )
-        raw = response.content[0].text.strip()
+        text_blocks = [block.text for block in response.content if block.type == "text"]
+        if not text_blocks:
+            last_error = f"No text content block in response. stop_reason={response.stop_reason}, content={response.content}"
+            continue
+        raw = text_blocks[0].strip()
         try:
             return json.loads(raw)
         except json.JSONDecodeError as e:
