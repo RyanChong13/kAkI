@@ -1,0 +1,62 @@
+[
+  {
+    "name": "SkillsFuture Credit Top-Up",
+    "amount": 500.00,
+    "cap_remaining": 1000,
+    "eligibility_criteria": {
+      "min_age": 25,
+      "max_age": 65,
+      "sectors": ["technology", "finance", "healthcare", "manufacturing", "logistics", "retail", "education"],
+      "income_bands": ["low", "medium", "high"],
+      "max_prior_grants": 3
+    }
+  },
+  {
+    "name": "Workforce Singapore Adapt & Grow Grant",
+    "amount": 3000.00,
+    "cap_remaining": 500,
+    "eligibility_criteria": {
+      "min_age": 21,
+      "max_age": 62,
+      "sectors": ["technology", "finance", "healthcare", "manufacturing", "logistics"],
+      "income_bands": ["low", "medium"],
+      "max_prior_grants": 2
+    }
+  },
+  {
+    "name": "e2i Career Transition Programme",
+    "amount": 1500.00,
+    "cap_remaining": 800,
+    "eligibility_criteria": {
+      "min_age": 30,
+      "max_age": 60,
+      "sectors": ["technology", "manufacturing", "logistics", "retail"],
+      "income_bands": ["low", "medium"],
+      "max_prior_grants": 1
+    }
+  },
+  {
+    "name": "UTAP Training Grant",
+    "amount": 250.00,
+    "cap_remaining": 2000,
+    "eligibility_criteria": {
+      "min_age": 18,
+      "max_age": 65,
+      "sectors": ["technology", "finance", "healthcare", "manufacturing", "logistics", "retail", "education", "construction", "services"],
+      "income_bands": ["low", "medium", "high"],
+      "max_prior_grants": 5
+    }
+  },
+  {
+    "name": "NTUC LearningHub Subsidy",
+    "amount": 2000.00,
+    "cap_remaining": 300,
+    "eligibility_criteria": {
+      "min_age": 25,
+      "max_age": 55,
+      "sectors": ["technology", "finance", "healthcare"],
+      "income_bands": ["low", "medium"],
+      "max_prior_grants": 2
+    }
+  }
+]
