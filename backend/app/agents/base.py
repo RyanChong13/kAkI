@@ -7,7 +7,7 @@ client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 MAX_RETRIES = 1
 
 
-def call_agent(system_prompt: str, user_message: str, model: str = "claude-sonnet-4-20250514") -> dict:
+def call_agent(system_prompt: str, user_message: str, model: str = "claude-sonnet-5") -> dict:
     """Call Claude and return parsed JSON response with retry on malformed output."""
     last_error = None
     for attempt in range(MAX_RETRIES + 1):
