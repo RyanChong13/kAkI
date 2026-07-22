@@ -43,6 +43,18 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Redeployment / Upskilling Platform", version="1.0.0", lifespan=lifespan)
 
 # CORS
+origins = ["http://localhost:5173"]  # Vite dev server
+frontend_url = os.environ.get("FRONTEND_URL")
+if frontend_url:
+    origins.append(frontend_url)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],  # Vite dev server
