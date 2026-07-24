@@ -1,62 +1,67 @@
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+
+from app.auth import get_current_user
 from app.database import get_db
-from app.models.user import User
-from app.models.grant import GrantRecommendation
-from app.schemas import GrantRecommendationResponse
-from app.utils.auth import get_current_user
-from app.services import flow_service
-from app.agents.grant_matcher import match_grants
+from app.models import Course, GrantApplication, User
+from app.schemas import CourseOut, GrantApplicationOut, GrantMassApplyIn
 
-router = APIRouter(prefix="/grants", tags=["grants"])
+router = APIRouter(prefix="/api/grants", tags=["grants"])
 
 
-@router.post("/match", response_model=List[GrantRecommendationResponse])
-def get_matching_grants(
-    course_name: str = "",
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    session = flow_service.get_active_session(db, current_user.id)
-    if not session:
-        raise HTTPException(status_code=400, detail="No active session")
+@router.get("/available")
+def get_available_grants(course_ids: list[int] = Query(...), db: Session = Depends(get_db)):
+    """Given a set of selected courses, return the SkillsFuture Credit each is eligible for.
 
-    user_profile = {
-        "age": current_user.age,
-        "sector": current_user.sector,
-        "income_band": current_user.income_band,
-        "grant_history": current_user.grant_history or [],
-    }
+    Mirrors the diagram step "AI will recommend and show the available grants
+    that they can get" - grants here are the courses' SkillsFuture Credit
+    eligibility, since that's the real, well-defined SG upskilling subsidy.
+    """
+    courses = db.query(Course).filter(Course.id.in_(course_ids)).all()
+    return [
+        {
+            "course": CourseOut.model_validate(c),
+            "credit_amount_sgd": c.skillsfuture_credit_amount if c.skillsfuture_credit_eligible else 0.0,
+            "eligible": c.skillsfuture_credit_eligible,
+        }
+        for c in courses
+    ]
 
-    result = match_grants(db, user_profile, course_name)
 
-    recs = []
-    for grant in result["eligible_grants"]:
-        gr = GrantRecommendation(
-            session_id=session.id,
-            grant_id=grant["grant_id"],
-            course_name=course_name,
+@router.post("/mass-apply", response_model=list[GrantApplicationOut])
+def mass_apply_grants(payload: GrantMassApplyIn, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    courses = db.query(Course).filter(Course.id.in_(payload.course_ids)).all()
+    found_ids = {c.id for c in courses}
+    missing = set(payload.course_ids) - found_ids
+    if missing:
+        raise HTTPException(status_code=404, detail=f"Course(s) not found: {sorted(missing)}")
+
+    courses_by_id = {c.id: c for c in courses}
+    created = []
+    for course_id in payload.course_ids:
+        existing = (
+            db.query(GrantApplication)
+            .filter(GrantApplication.user_id == current_user.id, GrantApplication.course_id == course_id)
+            .first()
         )
-        db.add(gr)
-        recs.append(gr)
+        if existing:
+            created.append(existing)
+            continue
+        course = courses_by_id[course_id]
+        grant_app = GrantApplication(
+            user_id=current_user.id,
+            course_id=course_id,
+            credit_amount_sgd=course.skillsfuture_credit_amount if course.skillsfuture_credit_eligible else 0.0,
+        )
+        db.add(grant_app)
+        created.append(grant_app)
 
     db.commit()
-    for r in recs:
-        db.refresh(r)
-    return recs
+    for row in created:
+        db.refresh(row)
+    return created
 
 
-@router.get("/recommendations", response_model=List[GrantRecommendationResponse])
-def list_recommendations(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    session = flow_service.get_active_session(db, current_user.id)
-    if not session:
-        raise HTTPException(status_code=400, detail="No active session")
-
-    recs = db.query(GrantRecommendation).filter(
-        GrantRecommendation.session_id == session.id,
-    ).all()
-    return recs
+@router.get("", response_model=list[GrantApplicationOut])
+def list_grant_applications(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return db.query(GrantApplication).filter(GrantApplication.user_id == current_user.id).all()

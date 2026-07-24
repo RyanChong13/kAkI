@@ -1,56 +1,63 @@
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
-from pypdf import PdfReader
-import io
+
+from app.auth import get_current_user
 from app.database import get_db
-from app.models.user import User
-from app.models.resume import Resume
-from app.schemas import ResumeResponse
-from app.utils.auth import get_current_user
-from app.agents.resume_parser import parse_resume
+from app.models import ResumeProfile, User
+from app.schemas import ResumeProfileOut
+from app.services.resume_service import parse_resume_pdf
 
-router = APIRouter(prefix="/resume", tags=["resume"])
+router = APIRouter(prefix="/api/resume", tags=["resume"])
+
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10MB
 
 
-@router.post("/upload", response_model=ResumeResponse)
+@router.post("/upload", response_model=ResumeProfileOut)
 async def upload_resume(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if not file.filename or not file.filename.endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are accepted")
+    if file.content_type != "application/pdf" and not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Please upload a PDF file")
 
-    contents = await file.read()
-    reader = PdfReader(io.BytesIO(contents))
-    raw_text = ""
-    for page in reader.pages:
-        raw_text += page.extract_text() or ""
-
-    if not raw_text.strip():
-        raise HTTPException(status_code=400, detail="Could not extract text from PDF")
+    file_bytes = await file.read()
+    if len(file_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=400, detail="File too large (max 10MB)")
 
     try:
-        parsed_skills = parse_resume(raw_text)
-    except ValueError as e:
-        raise HTTPException(status_code=500, detail=f"Resume parsing failed: {str(e)}")
+        parsed = parse_resume_pdf(file_bytes)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not read this PDF. Please try a different file.")
 
-    resume = Resume(
-        user_id=current_user.id,
-        raw_text=raw_text,
-        parsed_skills=parsed_skills,
-    )
-    db.add(resume)
+    profile = db.query(ResumeProfile).filter(ResumeProfile.user_id == current_user.id).first()
+    skills_str = ", ".join(parsed.extracted_skills)
+
+    if profile:
+        profile.filename = file.filename
+        profile.raw_text = parsed.raw_text
+        profile.extracted_skills = skills_str
+        profile.extracted_name = parsed.extracted_name
+        profile.years_experience_guess = parsed.years_experience_guess
+    else:
+        profile = ResumeProfile(
+            user_id=current_user.id,
+            filename=file.filename,
+            raw_text=parsed.raw_text,
+            extracted_skills=skills_str,
+            extracted_name=parsed.extracted_name,
+            years_experience_guess=parsed.years_experience_guess,
+        )
+        db.add(profile)
+
     db.commit()
-    db.refresh(resume)
-    return resume
+    db.refresh(profile)
+    return profile
 
 
-@router.get("/me", response_model=Optional[ResumeResponse])
-def get_my_resume(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    resume = db.query(Resume).filter(Resume.user_id == current_user.id).order_by(Resume.uploaded_at.desc()).first()
-    return resume
+@router.get("/me", response_model=ResumeProfileOut)
+def get_my_resume(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    profile = db.query(ResumeProfile).filter(ResumeProfile.user_id == current_user.id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="No resume uploaded yet")
+    return profile

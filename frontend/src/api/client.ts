@@ -1,61 +1,60 @@
-import axios from 'axios';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8000' : ''),
-  headers: { 'Content-Type': 'application/json' },
-});
+const TOKEN_KEY = "skillsg_token";
 
-// Attach JWT token to every request
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setToken(token: string | null) {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  else localStorage.removeItem(TOKEN_KEY);
+}
+
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
   }
-  return config;
-});
+}
 
-// Auth
-export const register = (data: { email: string; password: string; name: string; age?: number; sector?: string; income_band?: string }) =>
-  api.post('/auth/register', data);
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = {
+    ...(options.headers as Record<string, string>),
+  };
+  if (!(options.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
+  if (token) headers["Authorization"] = `Bearer ${token}`;
 
-export const login = (data: { email: string; password: string }) =>
-  api.post('/auth/login', data);
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  } catch {
+    throw new ApiError(0, "Could not reach the server. Please check your connection and try again.");
+  }
 
-// Resume
-export const uploadResume = (file: File) => {
-  const formData = new FormData();
-  formData.append('file', file);
-  return api.post('/resume/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  if (!res.ok) {
+    let detail = `Request failed (${res.status})`;
+    try {
+      const body = await res.json();
+      detail = body.detail || detail;
+    } catch {
+      // ignore, keep default message
+    }
+    throw new ApiError(res.status, detail);
+  }
+
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
+}
+
+export const api = {
+  get: <T>(path: string) => request<T>(path, { method: "GET" }),
+  post: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: "POST", body: body !== undefined ? JSON.stringify(body) : undefined }),
+  postForm: <T>(path: string, form: FormData) => request<T>(path, { method: "POST", body: form }),
+  del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };
-
-export const getResume = () => api.get('/resume/me');
-
-// Flow
-export const startFlow = (path: string) => api.post('/flow/start', { path });
-export const getSession = () => api.get('/flow/session');
-export const submitFeedback = (feedback: string, selected_job_ids?: number[]) =>
-  api.post('/flow/feedback', { feedback, selected_job_ids });
-
-// Jobs
-export const getJobRecommendations = () => api.post('/jobs/recommend');
-export const listJobSuggestions = () => api.get('/jobs/suggestions');
-
-// Upskilling
-export const getUpskillingPlan = (data: { goal: string; time: string; cost: string; scope: string }) =>
-  api.post('/upskilling/plan', data);
-
-// Grants
-export const getMatchingGrants = (course_name: string) =>
-  api.post(`/grants/match?course_name=${encodeURIComponent(course_name)}`);
-export const listGrantRecommendations = () => api.get('/grants/recommendations');
-
-// Apply
-export const getApplyPreview = (type: string, target_ids: number[]) =>
-  api.post('/apply/preview', { type, target_ids });
-export const confirmApply = (preview_id: string) =>
-  api.post('/apply/confirm', { preview_id, confirmed: true });
-export const getApplyHistory = () => api.get('/apply/history');
-
-export default api;

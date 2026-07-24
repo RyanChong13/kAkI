@@ -1,42 +1,98 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import DashboardPage from './pages/DashboardPage';
-import ResumeUploadPage from './pages/ResumeUploadPage';
-import PathSelectionPage from './pages/PathSelectionPage';
-import JobRecommendationsPage from './pages/JobRecommendationsPage';
-import UpskillingPage from './pages/UpskillingPage';
-import GrantSelectionPage from './pages/GrantSelectionPage';
-import MassApplyReviewPage from './pages/MassApplyReviewPage';
-import ExitPage from './pages/ExitPage';
+import { Route, Routes } from "react-router-dom";
+import Navbar from "./components/Navbar";
+import ProtectedRoute from "./components/ProtectedRoute";
+import Landing from "./pages/Landing";
+import Register from "./pages/Register";
+import Login from "./pages/Login";
+import ResumeUpload from "./pages/ResumeUpload";
+import ChoosePath from "./pages/ChoosePath";
+import Dashboard from "./pages/Dashboard";
+import RecommendedJobs from "./pages/jobRedeployment/RecommendedJobs";
+import MassApply from "./pages/jobRedeployment/MassApply";
+import GoalPrompt from "./pages/upskilling/GoalPrompt";
+import RecommendedCourses from "./pages/upskilling/RecommendedCourses";
+import RecommendedGrants from "./pages/upskilling/RecommendedGrants";
+import Browse from "./pages/courses/Browse";
+import CourseDetail from "./pages/courses/CourseDetail";
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated } = useAuth();
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
-};
-
-const App: React.FC = () => {
+export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-          <Route path="/resume" element={<ProtectedRoute><ResumeUploadPage /></ProtectedRoute>} />
-          <Route path="/choose-path" element={<ProtectedRoute><PathSelectionPage /></ProtectedRoute>} />
-          <Route path="/jobs" element={<ProtectedRoute><JobRecommendationsPage /></ProtectedRoute>} />
-          <Route path="/upskilling" element={<ProtectedRoute><UpskillingPage /></ProtectedRoute>} />
-          <Route path="/grants" element={<ProtectedRoute><GrantSelectionPage /></ProtectedRoute>} />
-          <Route path="/review" element={<ProtectedRoute><MassApplyReviewPage /></ProtectedRoute>} />
-          <Route path="/exit" element={<ProtectedRoute><ExitPage /></ProtectedRoute>} />
-          <Route path="*" element={<Navigate to="/dashboard" />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
-  );
-};
+    <>
+      <Navbar />
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/courses" element={<Browse />} />
+        <Route path="/courses/:id" element={<CourseDetail />} />
 
-export default App;
+        <Route
+          path="/resume-upload"
+          element={
+            <ProtectedRoute>
+              <ResumeUpload />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/choose-path"
+          element={
+            <ProtectedRoute>
+              <ChoosePath />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/jobs/recommended"
+          element={
+            <ProtectedRoute>
+              <RecommendedJobs />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/jobs/apply"
+          element={
+            <ProtectedRoute>
+              <MassApply />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/upskilling/goal"
+          element={
+            <ProtectedRoute>
+              <GoalPrompt />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/upskilling/courses"
+          element={
+            <ProtectedRoute>
+              <RecommendedCourses />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/upskilling/grants"
+          element={
+            <ProtectedRoute>
+              <RecommendedGrants />
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+    </>
+  );
+}
