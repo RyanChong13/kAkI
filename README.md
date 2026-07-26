@@ -38,7 +38,7 @@ python -m venv .venv
 # source .venv/bin/activate   # macOS/Linux
 
 pip install -r requirements.txt
-copy .env.example .env        # Windows: copy, macOS/Linux: cp
+cp .env.example .env        # Windows: copy, macOS/Linux: cp
 ```
 
 Edit `backend/.env`:
@@ -61,7 +61,7 @@ API docs: http://localhost:8000/docs
 ```bash
 cd frontend
 npm install
-copy .env.example .env   # or cp on macOS/Linux
+cp .env.example .env   # or cp on macOS/Linux
 npm run dev
 ```
 
