@@ -5,9 +5,10 @@ import type { AuthResponse, User } from "../types";
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
-  register: (email: string, password: string, name: string) => Promise<void>;
-  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, name: string, role?: string) => Promise<User>;
+  login: (email: string, password: string) => Promise<User>;
   logout: () => void;
+  updateUser: (updates: Partial<User>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -29,16 +30,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  async function register(email: string, password: string, name: string) {
-    const res = await api.post<AuthResponse>("/api/auth/register", { email, password, name });
+  async function register(email: string, password: string, name: string, role: string = "public") {
+    const res = await api.post<AuthResponse>("/api/auth/register", { email, password, name, role });
     setToken(res.access_token);
     setUser(res.user);
+    return res.user;
   }
 
   async function login(email: string, password: string) {
     const res = await api.post<AuthResponse>("/api/auth/login", { email, password });
     setToken(res.access_token);
     setUser(res.user);
+    return res.user;
   }
 
   function logout() {
@@ -46,7 +49,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
-  return <AuthContext.Provider value={{ user, loading, register, login, logout }}>{children}</AuthContext.Provider>;
+  async function updateUser(updates: Partial<User>) {
+    const res = await api.put<User>("/api/auth/profile", updates);
+    setUser(res);
+  }
+
+  return <AuthContext.Provider value={{ user, loading, register, login, logout, updateUser }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthContextValue {

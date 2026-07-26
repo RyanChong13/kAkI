@@ -1,191 +1,258 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { api, ApiError } from "../../api/client";
-import CourseCard from "../../components/CourseCard";
+import { useEffect, useState } from "react";
+import { api } from "../../api/client";
+import type { Course, CourseListResponse, GrantApplicationOut } from "../../types";
 import { useAuth } from "../../context/AuthContext";
-import type { CourseListResponse } from "../../types";
 
-export default function Browse() {
+export default function CoursesBrowse() {
   const { user } = useAuth();
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
-  const [provider, setProvider] = useState("");
-  const [maxPrice, setMaxPrice] = useState("");
-  const [source, setSource] = useState("");
   const [categories, setCategories] = useState<string[]>([]);
-  const [providers, setProviders] = useState<string[]>([]);
-
-  const [data, setData] = useState<CourseListResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [applying, setApplying] = useState(false);
+  const [applyResult, setApplyResult] = useState<string | null>(null);
+  const [appliedIds, setAppliedIDs] = useState<Set<number>>(new Set());
 
   useEffect(() => {
-    api.get<string[]>("/api/courses/meta/categories").then(setCategories).catch(() => {});
-    api.get<string[]>("/api/courses/meta/providers").then(setProviders).catch(() => {});
+    api.get<string[]>("/api/courses/meta/categories").then(setCategories).catch(() => []);
+    loadCourses();
+    // Load already applied
+    if (user) {
+      api
+        .get<GrantApplicationOut[]>("/api/grants")
+        .then((apps) => setAppliedIDs(new Set(apps.map((a) => a.course_id))))
+        .catch(() => {});
+    }
   }, []);
 
-  useEffect(() => {
-    if (!user) return;
-    api
-      .get<{ course: { id: number } }[]>("/api/saved-courses")
-      .then((rows) => setSavedIds(new Set(rows.map((r) => r.course.id))))
-      .catch(() => {});
-  }, [user]);
-
-  async function loadCourses() {
+  function loadCourses() {
     setLoading(true);
-    setError(null);
     const params = new URLSearchParams();
     if (search) params.set("search", search);
     if (category) params.set("category", category);
-    if (provider) params.set("provider", provider);
-    if (maxPrice) params.set("max_price", maxPrice);
-    if (source) params.set("source", source);
+    api
+      .get<CourseListResponse>(`/api/courses?${params}`)
+      .then((res) => setCourses(res.items))
+      .catch(() => [])
+      .finally(() => setLoading(false));
+  }
 
-    try {
-      const result = await api.get<CourseListResponse>(`/api/courses?${params.toString()}`);
-      setData(result);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not load courses. Please try again shortly.");
-    } finally {
-      setLoading(false);
+  function toggleSelect(id: number) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAll() {
+    if (selected.size === courses.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(courses.map((c) => c.id)));
     }
   }
 
-  useEffect(() => {
-    loadCourses();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  function handleFilterSubmit(e: FormEvent) {
-    e.preventDefault();
-    loadCourses();
-  }
-
-  async function toggleSave(courseId: number) {
-    if (!user) return;
+  async function handleMassApply() {
+    if (selected.size === 0) return;
+    setApplying(true);
+    setApplyResult(null);
     try {
-      if (savedIds.has(courseId)) {
-        await api.del(`/api/saved-courses/${courseId}`);
-        setSavedIds((prev) => {
-          const next = new Set(prev);
-          next.delete(courseId);
-          return next;
-        });
-      } else {
-        await api.post(`/api/saved-courses/${courseId}`);
-        setSavedIds((prev) => new Set(prev).add(courseId));
-      }
-    } catch {
-      // non-critical
+      const result = await api.post<GrantApplicationOut[]>("/api/grants/mass-apply", {
+        course_ids: Array.from(selected),
+      });
+      setAppliedIDs((prev) => {
+        const next = new Set(prev);
+        result.forEach((r) => next.add(r.course_id));
+        return next;
+      });
+      setApplyResult(`Successfully applied to ${result.length} course(s)!`);
+      setSelected(new Set());
+    } catch (err) {
+      setApplyResult(err instanceof Error ? err.message : "Failed to apply.");
+    } finally {
+      setApplying(false);
     }
   }
 
   return (
     <div className="page">
       <div className="container">
-        <h2>Browse courses & workshops</h2>
-        <p>SkillsFuture courses plus live Singapore workshops from Eventbrite, all in one place.</p>
+        <h2 style={{ marginBottom: "0.5rem" }}>Browse Courses</h2>
+        <p className="muted" style={{ marginBottom: "1.5rem" }}>
+          Find SkillsFuture courses and apply directly through Nexa. Select multiple courses to apply at once.
+        </p>
 
-        {data && !data.eventbrite_available && data.eventbrite_notice && (
-          <div className="notice">{data.eventbrite_notice}</div>
+        {/* Filters */}
+        <div className="row" style={{ gap: "0.75rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
+          <input
+            style={{ flex: 1, minWidth: 200 }}
+            placeholder="Search courses..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && loadCourses()}
+          />
+          <select value={category} onChange={(e) => setCategory(e.target.value)} style={{ minWidth: 160 }}>
+            <option value="">All Categories</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          <button className="btn btn-secondary btn-sm" onClick={loadCourses}>
+            Search
+          </button>
+        </div>
+
+        {/* Multi-select bar */}
+        {user && (
+          <div
+            className="card card-compact row-between"
+            style={{
+              marginBottom: "1rem",
+              background: selected.size > 0 ? "var(--purple-50)" : "var(--bg-subtle)",
+              border: selected.size > 0 ? "1px solid var(--purple-300)" : undefined,
+            }}
+          >
+            <div className="row" style={{ gap: "0.75rem" }}>
+              <button className="btn btn-ghost btn-sm" onClick={selectAll}>
+                {selected.size === courses.length ? "Deselect All" : "Select All"}
+              </button>
+              <span className="muted" style={{ fontSize: "0.9rem" }}>
+                {selected.size > 0 ? `${selected.size} course(s) selected` : "Select courses to apply"}
+              </span>
+            </div>
+            {selected.size > 0 && (
+              <button className="btn btn-primary btn-sm" onClick={handleMassApply} disabled={applying}>
+                {applying ? "Applying..." : `Apply to ${selected.size} Course(s)`}
+              </button>
+            )}
+          </div>
         )}
-        {error && <div className="notice notice-error">{error}</div>}
 
-        <form onSubmit={handleFilterSubmit} className="card card-compact" style={{ marginBottom: "1.5rem" }}>
-          <div className="row" style={{ gap: "1rem" }}>
-            <div className="field" style={{ flex: 2, minWidth: 200, marginBottom: 0 }}>
-              <label htmlFor="search">Search</label>
-              <input
-                id="search"
-                type="text"
-                placeholder="Title, description, or skill"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-            <div className="field" style={{ flex: 1, minWidth: 160, marginBottom: 0 }}>
-              <label htmlFor="category">Category</label>
-              <select id="category" value={category} onChange={(e) => setCategory(e.target.value)}>
-                <option value="">All categories</option>
-                {categories.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field" style={{ flex: 1, minWidth: 160, marginBottom: 0 }}>
-              <label htmlFor="provider">Provider</label>
-              <select id="provider" value={provider} onChange={(e) => setProvider(e.target.value)}>
-                <option value="">All providers</option>
-                {providers.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field" style={{ flex: 1, minWidth: 140, marginBottom: 0 }}>
-              <label htmlFor="max-price">Max price (SGD)</label>
-              <input id="max-price" type="number" min={0} value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} />
-            </div>
-            <div className="field" style={{ flex: 1, minWidth: 160, marginBottom: 0 }}>
-              <label htmlFor="source">Source</label>
-              <select id="source" value={source} onChange={(e) => setSource(e.target.value)}>
-                <option value="">All sources</option>
-                <option value="skillsfuture">SkillsFuture</option>
-                <option value="eventbrite">Eventbrite</option>
-              </select>
-            </div>
+        {applyResult && (
+          <div
+            className="notice"
+            style={{
+              marginBottom: "1rem",
+              background: applyResult.includes("Success") ? undefined : "var(--danger-bg, #fee)",
+            }}
+          >
+            {applyResult}
           </div>
-          <div className="row" style={{ marginTop: "1rem" }}>
-            <button type="submit" className="btn btn-primary">
-              Apply filters
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => {
-                setSearch("");
-                setCategory("");
-                setProvider("");
-                setMaxPrice("");
-                setSource("");
-                setTimeout(loadCourses, 0);
-              }}
-            >
-              Clear
-            </button>
-          </div>
-        </form>
+        )}
 
         {loading ? (
-          <div className="spinner" />
-        ) : data && data.items.length > 0 ? (
-          <>
-            <p className="muted">{data.total} result(s)</p>
-            <div className="grid grid-2">
-              {data.items.map((course) => (
-                <CourseCard
-                  key={course.id}
-                  course={course}
-                  action={
-                    user && (
-                      <button
-                        className={savedIds.has(course.id) ? "btn btn-secondary" : "btn btn-ghost"}
-                        onClick={() => toggleSave(course.id)}
-                      >
-                        {savedIds.has(course.id) ? "★ Saved" : "☆ Save"}
-                      </button>
-                    )
-                  }
-                />
-              ))}
-            </div>
-          </>
+          <div style={{ display: "flex", justifyContent: "center", padding: "3rem" }}>
+            <div className="spinner" />
+          </div>
+        ) : courses.length === 0 ? (
+          <div className="card" style={{ textAlign: "center", padding: "2rem" }}>
+            <p className="muted">No courses found. Try a different search or category.</p>
+          </div>
         ) : (
-          <div className="notice">No courses match these filters. Try widening your search.</div>
+          <div className="stack" style={{ gap: "0.75rem" }}>
+            {courses.map((course) => {
+              const isSelected = selected.has(course.id);
+              const isApplied = appliedIDs.has(course.id);
+              return (
+                <div
+                  key={course.id}
+                  className="card"
+                  style={{
+                    border: isSelected ? "2px solid var(--purple-500)" : undefined,
+                    cursor: user ? "pointer" : undefined,
+                    transition: "border 0.15s",
+                  }}
+                  onClick={() => user && !isApplied && toggleSelect(course.id)}
+                >
+                  <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start" }}>
+                    {/* Checkbox */}
+                    {user && (
+                      <div
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: 6,
+                          border: `2px solid ${isSelected ? "var(--purple-500)" : "var(--border)"}`,
+                          background: isSelected ? "var(--purple-500)" : "transparent",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                          marginTop: 2,
+                        }}
+                      >
+                        {isSelected && (
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                            <path d="M3 7l3 3 5-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Content */}
+                    <div style={{ flex: 1 }}>
+                      <div className="row-between">
+                        <h3 style={{ fontSize: "1.05rem", marginBottom: "0.2rem" }}>{course.title}</h3>
+                        <div style={{ display: "flex", gap: "0.4rem" }}>
+                          {isApplied && <span className="badge badge-success">Applied</span>}
+                          {course.skillsfuture_credit_eligible && (
+                            <span className="badge" style={{ background: "var(--green-100, #dcfce7)", color: "var(--green-700, #166534)" }}>
+                              SFC Eligible
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <p className="muted" style={{ fontSize: "0.85rem", margin: "0.2rem 0" }}>
+                        {course.provider} &middot; {course.category}
+                      </p>
+                      <p style={{ fontSize: "0.9rem", margin: "0.4rem 0" }}>
+                        {course.description.length > 200
+                          ? course.description.slice(0, 200) + "..."
+                          : course.description}
+                      </p>
+                      <div className="row" style={{ gap: "1rem", marginTop: "0.5rem", fontSize: "0.85rem" }}>
+                        <span>
+                          <strong>S${course.price_sgd.toLocaleString()}</strong>
+                        </span>
+                        {course.date && (
+                          <span>
+                            {new Date(course.date).toLocaleDateString("en-SG", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
+                            {new Date(course.date).toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" }) !== "00:00" &&
+                              ` at ${new Date(course.date).toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" })}`}
+                          </span>
+                        )}
+                        {course.duration_hours && <span>{course.duration_hours}h</span>}
+                        {course.location && <span>{course.location}</span>}
+                        {course.skillsfuture_credit_eligible && (
+                          <span style={{ color: "var(--green-700, #166534)" }}>
+                            SFC: S${course.skillsfuture_credit_amount}
+                          </span>
+                        )}
+                      </div>
+                      {course.skills && (
+                        <div className="tags" style={{ marginTop: "0.5rem" }}>
+                          {course.skills
+                            .split(",")
+                            .slice(0, 5)
+                            .map((s) => (
+                              <span key={s.trim()} className="badge" style={{ fontSize: "0.7rem", padding: "0.15rem 0.5rem" }}>
+                                {s.trim()}
+                              </span>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>

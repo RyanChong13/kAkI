@@ -1,6 +1,7 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
-const TOKEN_KEY = "skillsg_token";
+const TOKEN_KEY = "nexa_token";
+const THEME_KEY = "nexa_theme";
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
@@ -9,6 +10,15 @@ export function getToken(): string | null {
 export function setToken(token: string | null) {
   if (token) localStorage.setItem(TOKEN_KEY, token);
   else localStorage.removeItem(TOKEN_KEY);
+}
+
+export function getTheme(): "light" | "dark" {
+  return (localStorage.getItem(THEME_KEY) as "light" | "dark") || "light";
+}
+
+export function setTheme(theme: "light" | "dark") {
+  localStorage.setItem(THEME_KEY, theme);
+  document.documentElement.setAttribute("data-theme", theme);
 }
 
 export class ApiError extends Error {
@@ -42,7 +52,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       const body = await res.json();
       detail = body.detail || detail;
     } catch {
-      // ignore, keep default message
+      // ignore
     }
     throw new ApiError(res.status, detail);
   }
@@ -55,6 +65,8 @@ export const api = {
   get: <T>(path: string) => request<T>(path, { method: "GET" }),
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "POST", body: body !== undefined ? JSON.stringify(body) : undefined }),
-  postForm: <T>(path: string, form: FormData) => request<T>(path, { method: "POST", body: form }),
+  put: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: "PUT", body: body !== undefined ? JSON.stringify(body) : undefined }),
   del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  postForm: <T>(path: string, form: FormData) => request<T>(path, { method: "POST", body: form }),
 };

@@ -1,98 +1,123 @@
 import { Route, Routes } from "react-router-dom";
+import { useAuth } from "./context/AuthContext";
 import Navbar from "./components/Navbar";
 import ProtectedRoute from "./components/ProtectedRoute";
+import RoleRoute from "./components/RoleRoute";
+import AIChat from "./components/AIChat";
 import Landing from "./pages/Landing";
 import Register from "./pages/Register";
 import Login from "./pages/Login";
-import ResumeUpload from "./pages/ResumeUpload";
-import ChoosePath from "./pages/ChoosePath";
+import Browse from "./pages/events/Browse";
+import EventDetail from "./pages/events/EventDetail";
 import Dashboard from "./pages/Dashboard";
-import RecommendedJobs from "./pages/jobRedeployment/RecommendedJobs";
-import MassApply from "./pages/jobRedeployment/MassApply";
-import GoalPrompt from "./pages/upskilling/GoalPrompt";
-import RecommendedCourses from "./pages/upskilling/RecommendedCourses";
-import RecommendedGrants from "./pages/upskilling/RecommendedGrants";
-import Browse from "./pages/courses/Browse";
-import CourseDetail from "./pages/courses/CourseDetail";
+import GrowthPlan from "./pages/GrowthPlan";
+import LearningJourney from "./pages/LearningJourney";
+import Profile from "./pages/Profile";
+import CoursesBrowse from "./pages/courses/Browse";
+import OrganiserDashboard from "./pages/organiser/Dashboard";
+import OrganiserSettings from "./pages/organiser/Settings";
+import OrganiserProfile from "./pages/organiser/Profile";
+import EventForm from "./pages/organiser/EventForm";
+import Onboarding from "./pages/Onboarding";
 
 export default function App() {
+  const { user } = useAuth();
+
   return (
     <>
       <Navbar />
       <Routes>
+        {/* Public routes */}
         <Route path="/" element={<Landing />} />
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/courses" element={<Browse />} />
-        <Route path="/courses/:id" element={<CourseDetail />} />
+        <Route path="/events" element={<Browse />} />
+        <Route path="/events/:id" element={<EventDetail />} />
+        <Route path="/courses" element={<CoursesBrowse />} />
 
+        {/* Protected routes */}
         <Route
-          path="/resume-upload"
+          path="/onboarding"
           element={
             <ProtectedRoute>
-              <ResumeUpload />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/choose-path"
-          element={
-            <ProtectedRoute>
-              <ChoosePath />
+              <Onboarding />
             </ProtectedRoute>
           }
         />
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute>
+            <RoleRoute allowedRoles={["public"]}>
               <Dashboard />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/jobs/recommended"
-          element={
-            <ProtectedRoute>
-              <RecommendedJobs />
-            </ProtectedRoute>
+            </RoleRoute>
           }
         />
         <Route
-          path="/jobs/apply"
+          path="/growth-plan"
           element={
-            <ProtectedRoute>
-              <MassApply />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/upskilling/goal"
-          element={
-            <ProtectedRoute>
-              <GoalPrompt />
-            </ProtectedRoute>
+            <RoleRoute allowedRoles={["public"]}>
+              <GrowthPlan />
+            </RoleRoute>
           }
         />
         <Route
-          path="/upskilling/courses"
+          path="/learning-journey"
+          element={
+            <RoleRoute allowedRoles={["public"]}>
+              <LearningJourney />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/profile"
           element={
             <ProtectedRoute>
-              <RecommendedCourses />
+              <Profile />
             </ProtectedRoute>
           }
         />
         <Route
-          path="/upskilling/grants"
+          path="/organiser"
           element={
-            <ProtectedRoute>
-              <RecommendedGrants />
-            </ProtectedRoute>
+            <RoleRoute allowedRoles={["organiser"]}>
+              <OrganiserDashboard />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/organiser/settings"
+          element={
+            <RoleRoute allowedRoles={["organiser"]}>
+              <OrganiserSettings />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/organiser/profile"
+          element={
+            <RoleRoute allowedRoles={["organiser"]}>
+              <OrganiserProfile />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/organiser/events/new"
+          element={
+            <RoleRoute allowedRoles={["organiser"]}>
+              <EventForm />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/organiser/events/:id/edit"
+          element={
+            <RoleRoute allowedRoles={["organiser"]}>
+              <EventForm />
+            </RoleRoute>
           }
         />
       </Routes>
+      {user && <AIChat />}
     </>
   );
 }
