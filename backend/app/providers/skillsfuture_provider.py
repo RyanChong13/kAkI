@@ -1,33 +1,36 @@
 """SkillsFuture course provider.
 
-There is no official public API for the MySkillsFuture course directory, so
-this adapter serves a seeded, realistic dataset (`app.seed_data.skillsfuture_courses`)
-instead of calling a live endpoint.
+Crawls the public MySkillsFuture course directory
+(https://courses.myskillsfuture.gov.sg/search) live on each refresh via
+`app.services.skillsfuture_scraper`, which paginates a curated set of search
+terms and parses the course data embedded in each server-rendered results page.
 
-To plug in a real integration later:
-  1. Implement a fetcher that either (a) calls an authorized SkillsFuture
-     Singapore data feed if/when one becomes available to your organization,
-     or (b) scrapes the public course directory at
-     https://www.myskillsfuture.gov.sg/content/portal/en/training-exchange/course-directory.html
-     respecting robots.txt / terms of use.
-  2. Have it return the same list-of-dict shape as `load_seeded_courses()`.
-  3. Swap the call in `fetch()` below - `course_service` and everything
-     downstream (DB, API, frontend) needs no changes.
+If the live crawl is disabled (`SKILLSFUTURE_LIVE_CRAWL=false`) or fails/returns
+nothing (network down, site markup changed, etc.), the provider falls back to
+the seeded dataset in `app.seed_data.skillsfuture_courses` so the app always
+starts with realistic data and never crashes on a flaky third party.
 """
 
-from app.providers.base import CourseProvider, NormalizedCourse, ProviderResult
+import logging
+
+from app.config import get_settings
 from app.models import CourseSource
+from app.providers.base import CourseProvider, NormalizedCourse, ProviderResult
 from app.seed_data.skillsfuture_courses import load_seeded_courses
+from app.services.skillsfuture_scraper import crawl
+
+logger = logging.getLogger(__name__)
 
 
 class SkillsFutureProvider(CourseProvider):
     source = CourseSource.SKILLSFUTURE
 
     async def fetch(self) -> ProviderResult:
-        try:
-            raw_courses = load_seeded_courses()
-        except Exception as exc:  # defensive: seed data should never fail to load
-            return ProviderResult(courses=[], available=False, notice=f"SkillsFuture data unavailable: {exc}")
+        raw_courses, notice = await self._load_raw_courses()
+        if not raw_courses:
+            return ProviderResult(
+                courses=[], available=False, notice=notice or "SkillsFuture data unavailable"
+            )
 
         courses = [
             NormalizedCourse(
@@ -36,7 +39,7 @@ class SkillsFutureProvider(CourseProvider):
                 title=c["title"],
                 provider=c["provider"],
                 description=c.get("description", ""),
-                category=c.get("category", "General"),
+                category=c.get("category", "SkillsFuture"),
                 date=None,
                 duration_hours=c.get("duration_hours"),
                 price_sgd=c.get("price_sgd", 0.0),
@@ -48,5 +51,23 @@ class SkillsFutureProvider(CourseProvider):
                 skills=c.get("skills", []),
             )
             for c in raw_courses
+            if c.get("external_id") and c.get("title")
         ]
-        return ProviderResult(courses=courses, available=True)
+        return ProviderResult(courses=courses, available=True, notice=notice)
+
+    async def _load_raw_courses(self) -> tuple[list[dict], str | None]:
+        """Return (courses, notice). Prefers the live crawl, falls back to seed."""
+        settings = get_settings()
+        if settings.skillsfuture_live_crawl:
+            try:
+                live = await crawl()
+                if live:
+                    return live, None
+                logger.warning("SkillsFuture live crawl returned no courses; using seed fallback")
+            except Exception as exc:
+                logger.warning("SkillsFuture live crawl failed (%s); using seed fallback", exc)
+
+        try:
+            return load_seeded_courses(), "Live SkillsFuture data unavailable; showing sample courses"
+        except Exception as exc:
+            return [], f"SkillsFuture data unavailable: {exc}"

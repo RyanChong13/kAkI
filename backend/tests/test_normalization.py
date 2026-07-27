@@ -1,35 +1,94 @@
 import asyncio
+import json
 from datetime import datetime
 
+from app.config import get_settings
 from app.models import Course, CourseSource
 from app.providers.eventbrite_provider import EventbriteProvider
 from app.providers.skillsfuture_provider import SkillsFutureProvider
 from app.seed_data.skillsfuture_courses import load_seeded_courses
 from app.services.course_service import _upsert_course
+from app.services.skillsfuture_scraper import normalize_course, parse_rsc_stream
 
 
 def run(coro):
     return asyncio.run(coro)
 
 
-class TestSkillsFutureNormalization:
-    def test_returns_a_course_per_seed_entry(self):
+def _make_search_html(course: dict, description_text: str) -> str:
+    """Build a minimal search-results HTML that embeds one course in the RSC
+    payload, with its description stored as a `$31` reference chunk - mirroring
+    the real courses.myskillsfuture.gov.sg markup."""
+    obj = dict(course)
+    obj["courseDescription"] = "$31"
+    course_json = json.dumps(obj)
+    desc_len = len(description_text.encode("utf-8"))
+    stream = f"\n31:T{desc_len:x},{description_text}\n10:{course_json}\n"
+    chunk = json.dumps(stream)  # JS string literal, incl. surrounding quotes
+    return f"<html><body><script>self.__next_f.push([1,{chunk}])</script></body></html>"
+
+
+SAMPLE_RAW_COURSE = {
+    "courseRefNo": "TGS-2024049712",
+    "courseSeoName": "Data-Science-and-AI",
+    "courseTitle": "Advanced Certificate in Data Science and AI",
+    "trainingProviderName": "NANYANG TECHNOLOGICAL UNIVERSITY",
+    "trainingProviderAlias": "NTU",
+    "areaOfTraining": ["Information and Communications"],
+    "fullCostPerTrainee": 29600,
+    "netCostPerTrainee": 8880,
+    "courseSkills": ["Artificial Intelligence", "Data Analytics"],
+}
+
+
+class TestSkillsFutureScraper:
+    def test_parse_rsc_stream_extracts_course_and_resolves_description(self):
+        description = "Hands-on introduction to machine learning with Python."
+        html = _make_search_html(SAMPLE_RAW_COURSE, description)
+
+        parsed = parse_rsc_stream(html)
+
+        assert len(parsed) == 1
+        assert parsed[0]["courseRefNo"] == "TGS-2024049712"
+        assert parsed[0]["courseTitle"] == SAMPLE_RAW_COURSE["courseTitle"]
+        # The "$31" reference must be resolved to the actual description text.
+        assert parsed[0]["courseDescription"] == description
+
+    def test_parse_rsc_stream_deduplicates_by_ref(self):
+        html = _make_search_html(SAMPLE_RAW_COURSE, "desc")
+        # Two identical course blocks -> should be deduped to one.
+        doubled = html + html
+        assert len(parse_rsc_stream(doubled)) == 1
+
+    def test_parse_rsc_stream_handles_empty_html(self):
+        assert parse_rsc_stream("<html></html>") == []
+
+    def test_normalize_course_maps_fields_and_credit(self):
+        result = normalize_course(SAMPLE_RAW_COURSE)
+
+        assert result["external_id"] == "TGS-2024049712"
+        assert result["title"] == SAMPLE_RAW_COURSE["courseTitle"]
+        assert result["provider"] == "NTU"  # alias preferred
+        assert result["category"] == "Information and Communications"
+        assert result["price_sgd"] == 8880  # net (subsidised) fee
+        assert result["skillsfuture_credit_amount"] == 29600 - 8880
+        assert result["skillsfuture_credit_eligible"] is True
+        assert result["skills"] == ["Artificial Intelligence", "Data Analytics"]
+        assert result["url"].endswith("/courses/TGS-2024049712--Data-Science-and-AI")
+
+
+class TestSkillsFutureProviderFallback:
+    def test_fetch_falls_back_to_seed_when_live_crawl_disabled(self, monkeypatch):
+        get_settings.cache_clear()
+        monkeypatch.setenv("SKILLSFUTURE_LIVE_CRAWL", "false")
+
         result = run(SkillsFutureProvider().fetch())
+
         assert result.available is True
         assert len(result.courses) == len(load_seeded_courses())
-
-    def test_normalized_fields_match_source(self):
-        result = run(SkillsFutureProvider().fetch())
-        first = next(c for c in result.courses if c.external_id == "sf-001")
-        raw = load_seeded_courses()[0]
-
-        assert first.source == CourseSource.SKILLSFUTURE
-        assert first.title == raw["title"]
-        assert first.provider == raw["provider"]
-        assert first.price_sgd == raw["price_sgd"]
-        assert first.skillsfuture_credit_eligible == raw["skillsfuture_credit_eligible"]
-        assert first.skills == raw["skills"]  # provider keeps skills as a list; DB layer joins it
-        assert first.location == "Singapore"
+        assert all(c.source == CourseSource.SKILLSFUTURE for c in result.courses)
+        assert all(c.location == "Singapore" for c in result.courses)
+        get_settings.cache_clear()
 
 
 class TestEventbriteNormalization:
