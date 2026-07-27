@@ -158,7 +158,7 @@ export default function CoursesBrowse() {
           <div className="stack" style={{ gap: "0.75rem" }}>
             {courses.map((course) => {
               const isSelected = selected.has(course.id);
-              const isApplied = appliedIDs.has(course.id);
+              const isApplied = appliedIds.has(course.id);
               return (
                 <div
                   key={course.id}
