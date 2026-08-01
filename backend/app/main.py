@@ -6,7 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import Base, SessionLocal, engine
-from app.models import Event
+from app.models import Event, User, UserRole
+from app.auth import hash_password
 from app.routers import ai, applications, auth, courses, events, grants, jobs, organiser, resume, saved
 from app.scheduler import initial_refresh, start_scheduler
 from app.seed_data.events_seed import load_seeded_events
@@ -126,7 +127,27 @@ def seed_events(db):
         db.commit()
         logger.info("Seeded %d events", len(load_seeded_events()))
 
+DEMO_ACCOUNTS = [
+    {"email": "demo-public@nexa.dev", "password": "DemoPublic123!", "name": "Demo Public", "role": UserRole.PUBLIC},
+    {"email": "demo-organiser@nexa.dev", "password": "DemoOrganiser123!", "name": "Demo Organiser", "role": UserRole.ORGANISER},
+]
 
+
+def seed_demo_accounts(db):
+    """Create demo login accounts if they don't already exist."""
+    for acc in DEMO_ACCOUNTS:
+        existing = db.query(User).filter(User.email == acc["email"]).first()
+        if not existing:
+            user = User(
+                email=acc["email"],
+                hashed_password=hash_password(acc["password"]),
+                name=acc["name"],
+                role=acc["role"],
+            )
+            db.add(user)
+    db.commit()
+    logger.info("Demo accounts ready")
+    
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
@@ -134,6 +155,7 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         seed_events(db)
+        seed_demo_accounts(db)
         refresh_jobs(db)
     finally:
         db.close()
