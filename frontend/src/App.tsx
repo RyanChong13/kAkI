@@ -1,42 +1,123 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import DashboardPage from './pages/DashboardPage';
-import ResumeUploadPage from './pages/ResumeUploadPage';
-import PathSelectionPage from './pages/PathSelectionPage';
-import JobRecommendationsPage from './pages/JobRecommendationsPage';
-import UpskillingPage from './pages/UpskillingPage';
-import GrantSelectionPage from './pages/GrantSelectionPage';
-import MassApplyReviewPage from './pages/MassApplyReviewPage';
-import ExitPage from './pages/ExitPage';
+import { Route, Routes } from "react-router-dom";
+import { useAuth } from "./context/AuthContext";
+import Navbar from "./components/Navbar";
+import ProtectedRoute from "./components/ProtectedRoute";
+import RoleRoute from "./components/RoleRoute";
+import AIChat from "./components/AIChat";
+import Landing from "./pages/Landing";
+import Register from "./pages/Register";
+import Login from "./pages/Login";
+import Browse from "./pages/events/Browse";
+import EventDetail from "./pages/events/EventDetail";
+import Dashboard from "./pages/Dashboard";
+import GrowthPlan from "./pages/GrowthPlan";
+import LearningJourney from "./pages/LearningJourney";
+import Profile from "./pages/Profile";
+import CoursesBrowse from "./pages/courses/Browse";
+import OrganiserDashboard from "./pages/organiser/Dashboard";
+import OrganiserSettings from "./pages/organiser/Settings";
+import OrganiserProfile from "./pages/organiser/Profile";
+import EventForm from "./pages/organiser/EventForm";
+import Onboarding from "./pages/Onboarding";
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated } = useAuth();
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
-};
+export default function App() {
+  const { user } = useAuth();
 
-const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-          <Route path="/resume" element={<ProtectedRoute><ResumeUploadPage /></ProtectedRoute>} />
-          <Route path="/choose-path" element={<ProtectedRoute><PathSelectionPage /></ProtectedRoute>} />
-          <Route path="/jobs" element={<ProtectedRoute><JobRecommendationsPage /></ProtectedRoute>} />
-          <Route path="/upskilling" element={<ProtectedRoute><UpskillingPage /></ProtectedRoute>} />
-          <Route path="/grants" element={<ProtectedRoute><GrantSelectionPage /></ProtectedRoute>} />
-          <Route path="/review" element={<ProtectedRoute><MassApplyReviewPage /></ProtectedRoute>} />
-          <Route path="/exit" element={<ProtectedRoute><ExitPage /></ProtectedRoute>} />
-          <Route path="*" element={<Navigate to="/dashboard" />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
-  );
-};
+    <>
+      <Navbar />
+      <Routes>
+        {/* Public routes */}
+        <Route path="/" element={<Landing />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/events" element={<Browse />} />
+        <Route path="/events/:id" element={<EventDetail />} />
+        <Route path="/courses" element={<CoursesBrowse />} />
 
-export default App;
+        {/* Protected routes */}
+        <Route
+          path="/onboarding"
+          element={
+            <ProtectedRoute>
+              <Onboarding />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard"
+          element={
+            <RoleRoute allowedRoles={["public"]}>
+              <Dashboard />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/growth-plan"
+          element={
+            <RoleRoute allowedRoles={["public"]}>
+              <GrowthPlan />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/learning-journey"
+          element={
+            <RoleRoute allowedRoles={["public"]}>
+              <LearningJourney />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/organiser"
+          element={
+            <RoleRoute allowedRoles={["organiser"]}>
+              <OrganiserDashboard />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/organiser/settings"
+          element={
+            <RoleRoute allowedRoles={["organiser"]}>
+              <OrganiserSettings />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/organiser/profile"
+          element={
+            <RoleRoute allowedRoles={["organiser"]}>
+              <OrganiserProfile />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/organiser/events/new"
+          element={
+            <RoleRoute allowedRoles={["organiser"]}>
+              <EventForm />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/organiser/events/:id/edit"
+          element={
+            <RoleRoute allowedRoles={["organiser"]}>
+              <EventForm />
+            </RoleRoute>
+          }
+        />
+      </Routes>
+      {user && <AIChat />}
+    </>
+  );
+}
