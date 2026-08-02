@@ -1,6 +1,6 @@
 """Adapter pattern for course/workshop data sources.
 
-Every provider (SkillsFuture, Eventbrite, and any future source) implements
+Every provider (SkillsFuture and any future source) implements
 `CourseProvider.fetch()` and returns a list of `NormalizedCourse` objects.
 `app.services.course_service` is the only code that talks to the database:
 it calls each registered provider, normalizes results into `Course` rows,
@@ -25,9 +25,10 @@ class NormalizedCourse:
     category: str = "General"
     date: datetime | None = None
     duration_hours: float | None = None
-    price_sgd: float = 0.0
+    price_sgd: float = 0.0  # estimated payable (after subsidy)
+    full_price_sgd: float = 0.0  # full course fee before subsidy
     skillsfuture_credit_eligible: bool = False
-    skillsfuture_credit_amount: float = 0.0
+    skillsfuture_credit_amount: float = 0.0  # subsidy amount
     location: str = "Singapore"
     url: str = ""
     image_url: str = ""

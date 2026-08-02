@@ -26,67 +26,6 @@ export interface AuthResponse {
   user: User;
 }
 
-// ── Event ─────────────────────────────────────────────────────────────────────
-
-export interface Event {
-  id: number;
-  external_id: string;
-  source: string;
-  title: string;
-  organiser: string;
-  description: string;
-  category: string;
-  location: string;
-  date: string | null;
-  duration_hours: number | null;
-  price_sgd: number;
-  skills: string;
-  difficulty: string;
-  image_url: string;
-  tags: string;
-  seo_keywords: string;
-  recommended_audience: string;
-  embedding_tags: string;
-  capacity: number | null;
-  attendees_count: number;
-  is_cancelled: boolean;
-  is_full: boolean;
-  created_by: number | null;
-  fetched_at: string;
-}
-
-export interface EventListResponse {
-  items: Event[];
-  total: number;
-}
-
-export interface EventRecommendation {
-  event: Event;
-  match_score: number;
-  matched_skills: string[];
-  reason: string;
-}
-
-export interface SavedEventOut {
-  id: number;
-  event: Event;
-  created_at: string;
-}
-
-export interface EventRegistrationOut {
-  id: number;
-  event: Event;
-  registered_at: string;
-}
-
-export interface ResumeAnalysisResult {
-  extracted_skills: string[];
-  extracted_interests: string[];
-  experience_years: number | null;
-  suggested_categories: string[];
-  summary: string;
-}
-
 // ── AI Features ───────────────────────────────────────────────────────────────
 
 export interface GrowthPlanDay {
@@ -114,7 +53,7 @@ export interface GrowthPlanOut {
 export interface LearningJourneyWeek {
   week: number;
   title: string;
-  events: Event[];
+  events: any[];
   focus: string;
 }
 
@@ -125,12 +64,6 @@ export interface LearningJourneyOut {
   total_weeks: number;
   roadmap: LearningJourneyWeek[];
   created_at: string;
-}
-
-export interface SubstituteResult {
-  original: Event;
-  alternatives: EventRecommendation[];
-  reason: string;
 }
 
 export interface AIListingResult {
@@ -167,16 +100,6 @@ export interface OrganiserDashboardStats {
   }>;
 }
 
-export interface EventAnalytics {
-  event_id: number;
-  title: string;
-  views: number;
-  registrations: number;
-  attendance_rate: number;
-  avg_rating: number;
-  demographics: Record<string, Record<string, number>>;
-}
-
 // ── Legacy ────────────────────────────────────────────────────────────────────
 
 export type CourseSource = "skillsfuture" | "eventbrite";
@@ -191,9 +114,10 @@ export interface Course {
   category: string;
   date: string | null;
   duration_hours: number | null;
-  price_sgd: number;
+  price_sgd: number;  // estimated payable after subsidy
+  full_price_sgd: number;  // full course fee before subsidy
   skillsfuture_credit_eligible: boolean;
-  skillsfuture_credit_amount: number;
+  skillsfuture_credit_amount: number;  // subsidy amount
   location: string;
   url: string;
   image_url: string;
@@ -204,8 +128,6 @@ export interface Course {
 export interface CourseListResponse {
   items: Course[];
   total: number;
-  eventbrite_available: boolean;
-  eventbrite_notice: string | null;
 }
 
 export interface ResumeProfile {

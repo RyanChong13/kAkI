@@ -28,7 +28,6 @@ export default function Navbar() {
         </NavLink>
 
         <nav className="row" style={{ gap: "1rem" }}>
-          <NavLink to="/events" className="muted" style={navStyle}>Events</NavLink>
           <NavLink to="/courses" className="muted" style={navStyle}>Courses</NavLink>
           {user && (
             user.role === "organiser" ? (

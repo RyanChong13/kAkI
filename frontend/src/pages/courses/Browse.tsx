@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../../api/client";
 import type { Course, CourseListResponse, GrantApplicationOut } from "../../types";
 import { useAuth } from "../../context/AuthContext";
 
 export default function CoursesBrowse() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -155,99 +157,118 @@ export default function CoursesBrowse() {
             <p className="muted">No courses found. Try a different search or category.</p>
           </div>
         ) : (
-          <div className="stack" style={{ gap: "0.75rem" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+              gap: "1rem",
+            }}
+          >
             {courses.map((course) => {
               const isSelected = selected.has(course.id);
-              const isApplied = appliedIds.has(course.id);
               return (
                 <div
                   key={course.id}
                   className="card"
                   style={{
                     border: isSelected ? "2px solid var(--purple-500)" : undefined,
-                    cursor: user ? "pointer" : undefined,
-                    transition: "border 0.15s",
+                    cursor: "pointer",
+                    transition: "border 0.15s, box-shadow 0.15s, transform 0.15s",
+                    display: "flex",
+                    flexDirection: "column",
+                    minHeight: 280,
                   }}
-                  onClick={() => user && !isApplied && toggleSelect(course.id)}
+                  onClick={() => navigate(`/courses/${course.id}`)}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.1)";
+                    e.currentTarget.style.transform = "translateY(-2px)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = "";
+                    e.currentTarget.style.transform = "";
+                  }}
                 >
-                  <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start" }}>
-                    {/* Checkbox */}
-                    {user && (
-                      <div
-                        style={{
-                          width: 22,
-                          height: 22,
-                          borderRadius: 6,
-                          border: `2px solid ${isSelected ? "var(--purple-500)" : "var(--border)"}`,
-                          background: isSelected ? "var(--purple-500)" : "transparent",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                          marginTop: 2,
-                        }}
-                      >
-                        {isSelected && (
-                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                            <path d="M3 7l3 3 5-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Content */}
-                    <div style={{ flex: 1 }}>
-                      <div className="row-between">
-                        <h3 style={{ fontSize: "1.05rem", marginBottom: "0.2rem" }}>{course.title}</h3>
-                        <div style={{ display: "flex", gap: "0.4rem" }}>
-                          {isApplied && <span className="badge badge-success">Applied</span>}
-                          {course.skillsfuture_credit_eligible && (
-                            <span className="badge" style={{ background: "var(--green-100, #dcfce7)", color: "var(--green-700, #166534)" }}>
-                              SFC Eligible
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <p className="muted" style={{ fontSize: "0.85rem", margin: "0.2rem 0" }}>
-                        {course.provider} &middot; {course.category}
-                      </p>
-                      <p style={{ fontSize: "0.9rem", margin: "0.4rem 0" }}>
-                        {course.description.length > 200
-                          ? course.description.slice(0, 200) + "..."
-                          : course.description}
-                      </p>
-                      <div className="row" style={{ gap: "1rem", marginTop: "0.5rem", fontSize: "0.85rem" }}>
-                        <span>
-                          <strong>S${course.price_sgd.toLocaleString()}</strong>
+                  {/* Header */}
+                  <div style={{ marginBottom: "0.8rem" }}>
+                    <div className="row-between" style={{ alignItems: "flex-start", marginBottom: "0.4rem" }}>
+                      <h3 style={{ fontSize: "1.05rem", lineHeight: 1.3, flex: 1, marginRight: "0.5rem" }}>
+                        {course.title}
+                      </h3>
+                      {course.skillsfuture_credit_eligible && (
+                        <span
+                          className="badge"
+                          style={{
+                            background: "var(--green-100, #dcfce7)",
+                            color: "var(--green-700, #166534)",
+                            fontSize: "0.75rem",
+                            padding: "0.3rem 0.6rem",
+                            flexShrink: 0,
+                          }}
+                        >
+                          SFC Eligible
                         </span>
-                        {course.date && (
-                          <span>
-                            {new Date(course.date).toLocaleDateString("en-SG", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
-                            {new Date(course.date).toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" }) !== "00:00" &&
-                              ` at ${new Date(course.date).toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" })}`}
-                          </span>
-                        )}
-                        {course.duration_hours && <span>{course.duration_hours}h</span>}
-                        {course.location && <span>{course.location}</span>}
-                        {course.skillsfuture_credit_eligible && (
-                          <span style={{ color: "var(--green-700, #166534)" }}>
-                            SFC: S${course.skillsfuture_credit_amount}
-                          </span>
-                        )}
-                      </div>
-                      {course.skills && (
-                        <div className="tags" style={{ marginTop: "0.5rem" }}>
-                          {course.skills
-                            .split(",")
-                            .slice(0, 5)
-                            .map((s) => (
-                              <span key={s.trim()} className="badge" style={{ fontSize: "0.7rem", padding: "0.15rem 0.5rem" }}>
-                                {s.trim()}
-                              </span>
-                            ))}
-                        </div>
                       )}
                     </div>
+                    <p className="muted" style={{ fontSize: "0.85rem", margin: 0 }}>
+                      {course.provider} · {course.category}
+                    </p>
+                  </div>
+
+                  {/* Pricing */}
+                  <div style={{ marginBottom: "0.8rem" }}>
+                    <div style={{ fontSize: "1.3rem", fontWeight: 700, color: "var(--purple-700, #6d28d9)" }}>
+                      S${course.price_sgd.toLocaleString()}
+                    </div>
+                    <div className="muted" style={{ fontSize: "0.75rem" }}>Payable after subsidy</div>
+                  </div>
+
+                  {/* Skills */}
+                  {course.skills && (
+                    <div style={{ flex: 1 }}>
+                      <div className="muted" style={{ fontSize: "0.75rem", marginBottom: "0.4rem", fontWeight: 500 }}>
+                        Skills you'll gain:
+                      </div>
+                      <div className="tags" style={{ gap: "0.4rem" }}>
+                        {course.skills
+                          .split(",")
+                          .slice(0, 4)
+                          .map((s) => (
+                            <span
+                              key={s.trim()}
+                              className="badge"
+                              style={{
+                                fontSize: "0.75rem",
+                                padding: "0.3rem 0.6rem",
+                                background: "var(--purple-50, #f3e8ff)",
+                                color: "var(--purple-700, #6d28d9)",
+                              }}
+                            >
+                              {s.trim()}
+                            </span>
+                          ))}
+                        {course.skills.split(",").length > 4 && (
+                          <span className="badge" style={{ fontSize: "0.75rem", padding: "0.3rem 0.6rem" }}>
+                            +{course.skills.split(",").length - 4} more
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Footer with duration/location */}
+                  <div
+                    className="row"
+                    style={{
+                      gap: "1rem",
+                      marginTop: "0.8rem",
+                      paddingTop: "0.8rem",
+                      borderTop: "1px solid var(--border)",
+                      fontSize: "0.8rem",
+                      color: "var(--text-muted)",
+                    }}
+                  >
+                    {course.duration_hours && <span>{course.duration_hours}h</span>}
+                    {course.location && <span>{course.location}</span>}
                   </div>
                 </div>
               );

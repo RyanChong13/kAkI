@@ -1,5 +1,5 @@
 """Background scheduler that refreshes cached course data periodically,
-so page requests never call Eventbrite/SkillsFuture directly."""
+so page requests never call external APIs directly."""
 
 import asyncio
 import logging

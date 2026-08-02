@@ -59,83 +59,7 @@ class Token(BaseModel):
     user: UserOut
 
 
-# ── Event ──────────────────────────────────────────────────────────────────────
-
-class EventOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: int
-    external_id: str
-    source: str
-    title: str
-    organiser: str
-    description: str
-    category: str
-    location: str
-    date: datetime | None
-    duration_hours: float | None
-    price_sgd: float
-    skills: str
-    difficulty: str
-    image_url: str
-    tags: str
-    seo_keywords: str
-    recommended_audience: str
-    embedding_tags: str
-    capacity: int | None
-    attendees_count: int
-    is_cancelled: bool
-    is_full: bool
-    created_by: int | None = None
-    fetched_at: datetime
-
-
-class EventListResponse(BaseModel):
-    items: list[EventOut]
-    total: int
-
-
-class EventCreate(BaseModel):
-    title: str
-    organiser: str = ""
-    description: str = ""
-    category: str = "AI"
-    location: str = "Singapore"
-    date: str | None = None
-    duration_hours: float | None = None
-    price_sgd: float = 0.0
-    skills: str = ""
-    difficulty: str = "All Levels"
-    image_url: str = ""
-    tags: str = ""
-    seo_keywords: str = ""
-    recommended_audience: str = ""
-    capacity: int | None = None
-
-
-class EventUpdate(BaseModel):
-    title: str | None = None
-    description: str | None = None
-    category: str | None = None
-    location: str | None = None
-    date: str | None = None
-    duration_hours: float | None = None
-    price_sgd: float | None = None
-    skills: str | None = None
-    difficulty: str | None = None
-    image_url: str | None = None
-    tags: str | None = None
-    capacity: int | None = None
-    is_cancelled: bool | None = None
-
-
 # ── AI Features ────────────────────────────────────────────────────────────────
-
-class EventRecommendation(BaseModel):
-    event: EventOut
-    match_score: float
-    matched_skills: list[str]
-    reason: str = ""
-
 
 class GrowthPlanRequest(BaseModel):
     days: int = Field(default=7, description="7, 14, or 30")
@@ -167,7 +91,7 @@ class LearningJourneyRequest(BaseModel):
 class LearningJourneyWeek(BaseModel):
     week: int
     title: str
-    events: list[EventOut]
+    events: list[dict]
     focus: str = ""
 
 
@@ -180,18 +104,8 @@ class LearningJourneyOut(BaseModel):
     created_at: datetime
 
 
-class SubstituteRequest(BaseModel):
-    event_id: int
-
-
-class SubstituteResult(BaseModel):
-    original: EventOut
-    alternatives: list[EventRecommendation]
-    reason: str = ""
-
-
 class AIListingRequest(BaseModel):
-    input_text: str = Field(min_length=1, description="Event description or URL")
+    input_text: str = Field(min_length=1, description="Course description or URL")
 
 
 class AIListingResult(BaseModel):
@@ -217,17 +131,7 @@ class ChatResponse(BaseModel):
     language: str
 
 
-# ── Analytics (mock) ───────────────────────────────────────────────────────────
-
-class EventAnalytics(BaseModel):
-    event_id: int
-    title: str
-    views: int = 0
-    registrations: int = 0
-    attendance_rate: float = 0.0
-    avg_rating: float = 0.0
-    demographics: dict = Field(default_factory=dict)
-
+# ── Organiser ──────────────────────────────────────────────────────────────────
 
 class OrganiserDashboardStats(BaseModel):
     total_events: int
@@ -238,25 +142,7 @@ class OrganiserDashboardStats(BaseModel):
     monthly_growth: list[dict] = Field(default_factory=list)
 
 
-# ── Saved Events ───────────────────────────────────────────────────────────────
-
-class SavedEventOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: int
-    event: EventOut
-    created_at: datetime
-
-
-# ── Event Registration ─────────────────────────────────────────────────────────
-
-class EventRegistrationOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: int
-    event: EventOut
-    registered_at: datetime
-
-
-# ── Resume Analysis ─────────────────────────────────────────────────────────────
+# ─ Resume Analysis ─────────────────────────────────────────────────────────────
 
 class ResumeAnalysisResult(BaseModel):
     extracted_skills: list[str]
@@ -279,9 +165,10 @@ class CourseOut(BaseModel):
     category: str
     date: datetime | None
     duration_hours: float | None
-    price_sgd: float
+    price_sgd: float  # estimated payable after subsidy
+    full_price_sgd: float  # full course fee before subsidy
     skillsfuture_credit_eligible: bool
-    skillsfuture_credit_amount: float
+    skillsfuture_credit_amount: float  # subsidy amount
     location: str
     url: str
     image_url: str
@@ -292,8 +179,6 @@ class CourseOut(BaseModel):
 class CourseListResponse(BaseModel):
     items: list[CourseOut]
     total: int
-    eventbrite_available: bool
-    eventbrite_notice: str | None = None
 
 
 class JobOut(BaseModel):

@@ -14,18 +14,15 @@ from sqlalchemy.orm import Session
 
 from app.models import Course, CourseSource
 from app.providers.base import CourseProvider, NormalizedCourse, ProviderResult
-from app.providers.eventbrite_provider import EventbriteProvider
 from app.providers.skillsfuture_provider import SkillsFutureProvider
 
 logger = logging.getLogger(__name__)
 
 PROVIDERS: list[CourseProvider] = [
     SkillsFutureProvider(),
-    EventbriteProvider(),
 ]
 
-# In-memory record of the last refresh's provider availability, used to show
-# the "Eventbrite unavailable" banner on the frontend without re-querying it.
+# In-memory record of the last refresh's provider availability
 _last_provider_notices: dict[str, str | None] = {}
 _last_provider_availability: dict[str, bool] = {}
 
@@ -45,6 +42,7 @@ def _upsert_course(db: Session, item: NormalizedCourse) -> None:
         existing.date = item.date
         existing.duration_hours = item.duration_hours
         existing.price_sgd = item.price_sgd
+        existing.full_price_sgd = item.full_price_sgd
         existing.skillsfuture_credit_eligible = item.skillsfuture_credit_eligible
         existing.skillsfuture_credit_amount = item.skillsfuture_credit_amount
         existing.location = item.location
@@ -63,6 +61,7 @@ def _upsert_course(db: Session, item: NormalizedCourse) -> None:
                 date=item.date,
                 duration_hours=item.duration_hours,
                 price_sgd=item.price_sgd,
+                full_price_sgd=item.full_price_sgd,
                 skillsfuture_credit_eligible=item.skillsfuture_credit_eligible,
                 skillsfuture_credit_amount=item.skillsfuture_credit_amount,
                 location=item.location,

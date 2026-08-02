@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
-import EventCard from "../components/EventCard";
-import type { EventRegistrationOut, LearningJourneyOut } from "../types";
+import type { LearningJourneyOut } from "../types";
 
 export default function LearningJourney() {
   const { user } = useAuth();
@@ -10,53 +9,21 @@ export default function LearningJourney() {
   const [pastJourneys, setPastJourneys] = useState<LearningJourneyOut[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [registeredIds, setRegisteredIds] = useState<Set<number>>(new Set());
-  const [registeringId, setRegisteringId] = useState<number | null>(null);
 
   // Form state
   const [goal, setGoal] = useState("");
   const [weeks, setWeeks] = useState(4);
 
   useEffect(() => {
-    const journeyPromise = api
+    api
       .get<LearningJourneyOut[]>("/api/ai/learning-journeys")
       .then((journeys) => {
         setPastJourneys(journeys);
         if (journeys.length > 0) setJourney(journeys[0]);
       })
-      .catch(() => {});
-
-    const regPromise = user
-      ? api.get<EventRegistrationOut[]>("/api/events/registrations/list").catch(() => [])
-      : Promise.resolve([]);
-
-    Promise.all([journeyPromise, regPromise])
-      .then(([, regs]) => {
-        setRegisteredIds(new Set((regs as EventRegistrationOut[]).map((r) => r.event.id)));
-      })
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, [user]);
-
-  async function handleRegister(eventId: number) {
-    setRegisteringId(eventId);
-    try {
-      if (registeredIds.has(eventId)) {
-        await api.del(`/api/events/register/${eventId}`);
-        setRegisteredIds((prev) => {
-          const next = new Set(prev);
-          next.delete(eventId);
-          return next;
-        });
-      } else {
-        await api.post(`/api/events/register/${eventId}`);
-        setRegisteredIds((prev) => new Set(prev).add(eventId));
-      }
-    } catch {
-      // ignore
-    } finally {
-      setRegisteringId(null);
-    }
-  }
 
   async function handleGenerate(e: React.FormEvent) {
     e.preventDefault();
@@ -88,7 +55,7 @@ export default function LearningJourney() {
         <div className="container" style={{ maxWidth: 640 }}>
           <h2>Create Your Learning Journey</h2>
           <p className="muted">
-            Describe your career goal and AI will build a week-by-week roadmap with events to help you get there.
+            Describe your career goal and AI will build a week-by-week roadmap to help you get there.
           </p>
 
           <form onSubmit={handleGenerate} className="stack">
@@ -122,7 +89,7 @@ export default function LearningJourney() {
             <div className="notice" style={{ fontSize: "0.88rem" }}>
               <strong>Example goals:</strong>
               <div className="row" style={{ gap: "0.5rem", marginTop: "0.5rem" }}>
-                {["Become an AI Product Manager", "Transition to cybersecurity", "Build leadership skills", "Master public speaking"].map((ex) => (
+                {["Become an AI Product Manager", "Transition to cybersecurity", "Build leadership skills", "Master cloud architecture"].map((ex) => (
                   <button
                     key={ex}
                     type="button"
@@ -185,35 +152,6 @@ export default function LearningJourney() {
               <p className="muted" style={{ fontSize: "0.88rem", marginBottom: "0.75rem" }}>
                 Focus: {week.focus}
               </p>
-              {week.events.length > 0 && (
-                <div className="grid grid-2">
-                  {week.events.map((ev) => (
-                    <EventCard
-                      key={ev.id}
-                      event={ev}
-                      action={
-                        user ? (
-                          <button
-                            className={`btn btn-sm ${registeredIds.has(ev.id) ? "btn-success" : "btn-primary"}`}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              handleRegister(ev.id);
-                            }}
-                            disabled={registeringId === ev.id}
-                            style={{ width: "100%" }}
-                          >
-                            {registeringId === ev.id
-                              ? "..."
-                              : registeredIds.has(ev.id)
-                                ? "Registered"
-                                : "Register"}
-                          </button>
-                        ) : undefined
-                      }
-                    />
-                  ))}
-                </div>
-              )}
             </div>
           ))}
         </div>

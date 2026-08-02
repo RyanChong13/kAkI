@@ -43,6 +43,7 @@ class SkillsFutureProvider(CourseProvider):
                 date=None,
                 duration_hours=c.get("duration_hours"),
                 price_sgd=c.get("price_sgd", 0.0),
+                full_price_sgd=c.get("full_price_sgd", 0.0),
                 skillsfuture_credit_eligible=c.get("skillsfuture_credit_eligible", False),
                 skillsfuture_credit_amount=c.get("skillsfuture_credit_amount", 0.0),
                 location="Singapore",

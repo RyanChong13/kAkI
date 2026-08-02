@@ -2,16 +2,13 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
-import EventCard from "../components/EventCard";
-import type { EventRecommendation, EventRegistrationOut, SavedEventOut } from "../types";
+import type { GrowthPlanOut, LearningJourneyOut } from "../types";
 
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [recs, setRecs] = useState<EventRecommendation[]>([]);
-  const [saved, setSaved] = useState<SavedEventOut[]>([]);
-  const [registered, setRegistered] = useState<EventRegistrationOut[]>([]);
-  const [completedIds, setCompletedIds] = useState<number[]>([]);
+  const [growthPlans, setGrowthPlans] = useState<GrowthPlanOut[]>([]);
+  const [learningJourneys, setLearningJourneys] = useState<LearningJourneyOut[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Redirect organisers to their own dashboard
@@ -23,15 +20,11 @@ export default function Dashboard() {
 
   useEffect(() => {
     Promise.all([
-      api.get<EventRecommendation[]>("/api/ai/recommendations?limit=12").catch(() => []),
-      api.get<SavedEventOut[]>("/api/events/saved/list").catch(() => []),
-      api.get<number[]>("/api/events/completed/list").catch(() => []),
-      api.get<EventRegistrationOut[]>("/api/events/registrations/list").catch(() => []),
-    ]).then(([r, s, c, reg]) => {
-      setRecs(r);
-      setSaved(s);
-      setCompletedIds(c);
-      setRegistered(reg);
+      api.get<GrowthPlanOut[]>("/api/ai/growth-plans").catch(() => []),
+      api.get<LearningJourneyOut[]>("/api/ai/learning-journeys").catch(() => []),
+    ]).then(([plans, journeys]) => {
+      setGrowthPlans(plans);
+      setLearningJourneys(journeys);
       setLoading(false);
     });
   }, []);
@@ -50,25 +43,23 @@ export default function Dashboard() {
         {/* Quick stats */}
         <div className="grid grid-4" style={{ marginBottom: "2rem" }}>
           <div className="card stat-card">
-            <div className="stat-value">{recs.length}</div>
-            <div className="stat-label">Recommendations</div>
+            <div className="stat-value">{growthPlans.length}</div>
+            <div className="stat-label">Growth Plans</div>
           </div>
           <div className="card stat-card">
-            <div className="stat-value">{registered.length}</div>
-            <div className="stat-label">Registered</div>
-          </div>
-          <div className="card stat-card">
-            <div className="stat-value">{saved.length}</div>
-            <div className="stat-label">Saved Events</div>
-          </div>
-          <div className="card stat-card">
-            <div className="stat-value">{completedIds.length}</div>
-            <div className="stat-label">Completed</div>
+            <div className="stat-value">{learningJourneys.length}</div>
+            <div className="stat-label">Learning Journeys</div>
           </div>
           <Link to="/growth-plan" style={{ textDecoration: "none" }}>
             <div className="card stat-card card-hover">
               <div className="stat-value">AI</div>
-              <div className="stat-label">Growth Plan</div>
+              <div className="stat-label">New Growth Plan</div>
+            </div>
+          </Link>
+          <Link to="/learning-journey" style={{ textDecoration: "none" }}>
+            <div className="card stat-card card-hover">
+              <div className="stat-value">AI</div>
+              <div className="stat-label">New Journey</div>
             </div>
           </Link>
         </div>
@@ -77,60 +68,68 @@ export default function Dashboard() {
         <div className="row" style={{ gap: "0.75rem", marginBottom: "2rem" }}>
           <Link to="/growth-plan" className="btn btn-primary btn-sm">Generate Growth Plan</Link>
           <Link to="/learning-journey" className="btn btn-secondary btn-sm">Create Learning Journey</Link>
-          <Link to="/events" className="btn btn-ghost btn-sm">Browse All Events</Link>
+          <Link to="/courses" className="btn btn-ghost btn-sm">Browse Courses</Link>
           <Link to="/profile" className="btn btn-ghost btn-sm">Edit Profile</Link>
         </div>
 
-        {/* AI Recommendations */}
+        {/* Recent Growth Plans */}
         <section style={{ marginBottom: "2.5rem" }}>
           <div className="row-between" style={{ marginBottom: "1rem" }}>
-            <h3 style={{ marginBottom: 0 }}>Recommended for You</h3>
-            <Link to="/events" className="btn btn-ghost btn-sm">Browse all</Link>
+            <h3 style={{ marginBottom: 0 }}>Your Growth Plans</h3>
+            <Link to="/growth-plan" className="btn btn-ghost btn-sm">View all</Link>
           </div>
 
           {loading ? (
             <div style={{ display: "flex", justifyContent: "center", padding: "2rem" }}>
               <div className="spinner" />
             </div>
-          ) : recs.length > 0 ? (
+          ) : growthPlans.length > 0 ? (
             <div className="grid grid-3">
-              {recs.map((r) => (
-                <EventCard key={r.event.id} event={r.event} matchScore={r.match_score} reason={r.reason} />
+              {growthPlans.slice(0, 6).map((plan) => (
+                <div key={plan.id} className="card card-hover">
+                  <h4 style={{ margin: "0 0 0.5rem 0" }}>{plan.plan_type}-Day Plan</h4>
+                  <p className="muted" style={{ fontSize: "0.85rem", margin: 0 }}>
+                    {plan.days.length} days of activities
+                  </p>
+                  <p className="muted" style={{ fontSize: "0.75rem", margin: "0.5rem 0 0 0" }}>
+                    Created {new Date(plan.created_at).toLocaleDateString()}
+                  </p>
+                </div>
               ))}
             </div>
           ) : (
             <div className="card" style={{ textAlign: "center", padding: "2rem" }}>
               <p className="muted">
-                Complete your <Link to="/profile">profile</Link> with interests and goals to get personalised recommendations.
+                No growth plans yet. <Link to="/growth-plan">Create one</Link> to get started.
               </p>
             </div>
           )}
         </section>
 
-        {/* Registered Events */}
-        {registered.length > 0 && (
-          <section style={{ marginBottom: "2.5rem" }}>
-            <h3 style={{ marginBottom: "1rem" }}>Registered Events ({registered.length})</h3>
-            <div className="grid grid-3">
-              {registered.map((r) => (
-                <EventCard key={r.id} event={r.event} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Saved Events */}
+        {/* Recent Learning Journeys */}
         <section>
-          <h3 style={{ marginBottom: "1rem" }}>Saved Events ({saved.length})</h3>
-          {saved.length === 0 ? (
+          <div className="row-between" style={{ marginBottom: "1rem" }}>
+            <h3 style={{ marginBottom: 0 }}>Your Learning Journeys</h3>
+            <Link to="/learning-journey" className="btn btn-ghost btn-sm">View all</Link>
+          </div>
+
+          {learningJourneys.length === 0 ? (
             <div className="card" style={{ textAlign: "center", padding: "2rem" }}>
-              <p className="muted" style={{ marginBottom: "0.5rem" }}>No saved events yet.</p>
-              <Link to="/events" className="btn btn-secondary btn-sm">Browse events</Link>
+              <p className="muted" style={{ marginBottom: "0.5rem" }}>No learning journeys yet.</p>
+              <Link to="/learning-journey" className="btn btn-secondary btn-sm">Create one</Link>
             </div>
           ) : (
             <div className="grid grid-3">
-              {saved.map((s) => (
-                <EventCard key={s.id} event={s.event} />
+              {learningJourneys.slice(0, 6).map((journey) => (
+                <div key={journey.id} className="card card-hover">
+                  <h4 style={{ margin: "0 0 0.5rem 0" }}>{journey.goal}</h4>
+                  <p className="muted" style={{ fontSize: "0.85rem", margin: 0 }}>
+                    Week {journey.current_week} of {journey.total_weeks}
+                  </p>
+                  <p className="muted" style={{ fontSize: "0.75rem", margin: "0.5rem 0 0 0" }}>
+                    Created {new Date(journey.created_at).toLocaleDateString()}
+                  </p>
+                </div>
               ))}
             </div>
           )}

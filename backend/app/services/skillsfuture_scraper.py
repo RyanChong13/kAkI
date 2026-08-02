@@ -148,9 +148,9 @@ def normalize_course(raw: dict) -> dict:
 
     full_fee = _to_float(raw.get("fullCostPerTrainee"))
     net_fee = _to_float(raw.get("netCostPerTrainee"))
-    # Course fees on the portal are already the subsidised (net) fee for the user.
+    # price_sgd = estimated payable fee (after subsidy) for display consistency
     price = net_fee if net_fee else full_fee
-    credit_amount = max(full_fee - net_fee, 0.0)
+    subsidy = max(full_fee - net_fee, 0.0)
 
     skills = raw.get("courseSkills")
     skills = [s for s in skills if s] if isinstance(skills, list) else []
@@ -167,9 +167,10 @@ def normalize_course(raw: dict) -> dict:
         "category": category,
         "description": description[:2000],
         "duration_hours": None,  # portal expresses duration as a band, not hours
-        "price_sgd": round(price, 2),
+        "price_sgd": round(price, 2),  # estimated payable after subsidy
+        "full_price_sgd": round(full_fee, 2),  # full course fee before subsidy
         "skillsfuture_credit_eligible": True,
-        "skillsfuture_credit_amount": round(credit_amount, 2),
+        "skillsfuture_credit_amount": round(subsidy, 2),  # subsidy amount
         "skills": skills[:10],
         "url": url,
     }

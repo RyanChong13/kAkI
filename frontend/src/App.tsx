@@ -7,17 +7,15 @@ import AIChat from "./components/AIChat";
 import Landing from "./pages/Landing";
 import Register from "./pages/Register";
 import Login from "./pages/Login";
-import Browse from "./pages/events/Browse";
-import EventDetail from "./pages/events/EventDetail";
 import Dashboard from "./pages/Dashboard";
 import GrowthPlan from "./pages/GrowthPlan";
 import LearningJourney from "./pages/LearningJourney";
 import Profile from "./pages/Profile";
 import CoursesBrowse from "./pages/courses/Browse";
+import CourseDetail from "./pages/courses/CourseDetail";
 import OrganiserDashboard from "./pages/organiser/Dashboard";
 import OrganiserSettings from "./pages/organiser/Settings";
 import OrganiserProfile from "./pages/organiser/Profile";
-import EventForm from "./pages/organiser/EventForm";
 import Onboarding from "./pages/Onboarding";
 
 export default function App() {
@@ -31,9 +29,8 @@ export default function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/events" element={<Browse />} />
-        <Route path="/events/:id" element={<EventDetail />} />
         <Route path="/courses" element={<CoursesBrowse />} />
+        <Route path="/courses/:id" element={<CourseDetail />} />
 
         {/* Protected routes */}
         <Route
@@ -97,22 +94,6 @@ export default function App() {
           element={
             <RoleRoute allowedRoles={["organiser"]}>
               <OrganiserProfile />
-            </RoleRoute>
-          }
-        />
-        <Route
-          path="/organiser/events/new"
-          element={
-            <RoleRoute allowedRoles={["organiser"]}>
-              <EventForm />
-            </RoleRoute>
-          }
-        />
-        <Route
-          path="/organiser/events/:id/edit"
-          element={
-            <RoleRoute allowedRoles={["organiser"]}>
-              <EventForm />
             </RoleRoute>
           }
         />

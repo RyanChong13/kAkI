@@ -34,13 +34,9 @@ def get_courses(
         date_to=date_to,
         source=source,
     )
-    eventbrite_available, eventbrite_notice = get_provider_status(CourseSource.EVENTBRITE.value)
-
     return CourseListResponse(
         items=[CourseOut.model_validate(c) for c in courses],
         total=len(courses),
-        eventbrite_available=eventbrite_available,
-        eventbrite_notice=eventbrite_notice,
     )
 
 
@@ -85,10 +81,7 @@ async def refresh_courses(db: Session = Depends(get_db)):
     """Manually trigger a refresh from all providers (also runs on a schedule)."""
     await refresh_all_sources(db)
     courses = list_courses(db)
-    eventbrite_available, eventbrite_notice = get_provider_status(CourseSource.EVENTBRITE.value)
     return CourseListResponse(
         items=[CourseOut.model_validate(c) for c in courses],
         total=len(courses),
-        eventbrite_available=eventbrite_available,
-        eventbrite_notice=eventbrite_notice,
     )
