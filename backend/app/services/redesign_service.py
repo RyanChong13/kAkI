@@ -20,7 +20,7 @@ import re
 from sqlalchemy.orm import Session
 
 from app.agents.base import call_agent
-from app.models import Course
+from app.models import Course, SuggestionFeedback
 from app.seed_data.role_taxonomy import get_role, get_role_task_titles, search_roles
 from app.services.scheme_rules import get_course_schemes
 
@@ -52,6 +52,10 @@ Guidelines:
 - Consider the Singapore job market and SkillsFuture-relevant skills.
 - Vary the directions — don't just give variations of the same idea.
 - Upskilling areas should be learnable through courses (e.g. 'Python', 'Data Visualisation', 'Prompt Engineering', 'Cloud Architecture').
+- Language: write in plain, warm, everyday words. The reader is worried \
+about their job's future — be reassuring and practical, never alarming. \
+No jargon, acronyms or buzzwords (say "learn to build dashboards", not \
+"leverage BI ecosystems"). Short sentences.
 
 Return a JSON array of 2-3 direction objects.  Return ONLY valid JSON, \
 no markdown, no explanation."""
@@ -95,6 +99,9 @@ Guidelines:
 - transferable_skills must come from the current role's tasks or the user's listed skills.
 - Upskilling areas should be learnable through courses and prioritise closing the skill gaps.
 - Vary the pathways — don't just give variations of the same idea.
+- Language: write in plain, warm, everyday words. The reader is worried \
+about their job's future — be reassuring and practical, never alarming. \
+No jargon, acronyms or buzzwords. Short sentences.
 
 Return a JSON array of 2-3 pathway objects.  Return ONLY valid JSON, \
 no markdown, no explanation."""
@@ -104,6 +111,7 @@ def generate_redesign_suggestions(
     role_title: str,
     core_tasks: list[str],
     user_skills: list[str] | None = None,
+    feedback_addendum: str = "",
 ) -> list[dict]:
     """Call the LLM to generate 2-3 redesign suggestions for a role.
 
@@ -117,6 +125,8 @@ def generate_redesign_suggestions(
     if user_skills:
         system_prompt = SYSTEM_PROMPT + PERSONALISED_ADDENDUM
         skills_section = "\n\nUser's current skills (from their resume):\n- " + "\n- ".join(user_skills)
+    if feedback_addendum:
+        system_prompt = system_prompt + feedback_addendum
 
     user_message = (
         f"Role: {role_title}\n\n"
@@ -158,10 +168,13 @@ def generate_transition_suggestions(
     target_title: str,
     target_tasks: list[str],
     user_skills: list[str] | None = None,
+    feedback_addendum: str = "",
 ) -> list[dict]:
     """Call the LLM to generate 2-3 transition pathways current → target role."""
     current_text = "\n".join(f"- {t}" for t in current_tasks) if current_tasks else "- (tasks not specified)"
     target_text = "\n".join(f"- {t}" for t in target_tasks) if target_tasks else "- (tasks not specified)"
+
+    system_prompt = TRANSITION_SYSTEM_PROMPT + feedback_addendum
 
     skills_section = ""
     if user_skills:
@@ -179,7 +192,7 @@ def generate_transition_suggestions(
         f"Return only the JSON array."
     )
 
-    result = call_agent(TRANSITION_SYSTEM_PROMPT, user_message)
+    result = call_agent(system_prompt, user_message)
 
     if not isinstance(result, list):
         raise ValueError("LLM did not return a list of suggestions")
@@ -201,6 +214,45 @@ def generate_transition_suggestions(
         })
 
     return validated[:3]  # cap at 3
+
+
+def get_feedback_addendum(db: Session, role_title: str) -> str:
+    """Build a prompt addendum from recent negative user feedback.
+
+    Prioritises feedback for the same role, then falls back to recent
+    global feedback.  Returns "" when there is no negative feedback yet.
+    """
+    same_role = (
+        db.query(SuggestionFeedback)
+        .filter(SuggestionFeedback.rating == "not_right", SuggestionFeedback.role == role_title)
+        .order_by(SuggestionFeedback.created_at.desc())
+        .limit(6)
+        .all()
+    )
+    rows = same_role
+    if len(rows) < 6:
+        global_rows = (
+            db.query(SuggestionFeedback)
+            .filter(SuggestionFeedback.rating == "not_right")
+            .order_by(SuggestionFeedback.created_at.desc())
+            .limit(6)
+            .all()
+        )
+        seen = {r.id for r in rows}
+        rows = rows + [r for r in global_rows if r.id not in seen]
+
+    if not rows:
+        return ""
+
+    lines = []
+    for r in rows[:6]:
+        note = r.comment.strip() if r.comment else "users said it didn't feel right for their role"
+        lines.append(f"- \"{r.suggestion_title}\" ({r.role}): {note}")
+
+    return (
+        "\n\nPast user feedback — users felt these earlier suggestions missed "
+        "the mark. Avoid similar directions:\n" + "\n".join(lines)
+    )
 
 
 def _tokenize(text: str) -> set[str]:
@@ -290,6 +342,7 @@ def run_redesign(
     )
 
     # 2 — generate LLM suggestions (transition plan or redesign)
+    feedback_addendum = get_feedback_addendum(db, role["title"])
     if target:
         suggestions = generate_transition_suggestions(
             role["title"],
@@ -297,11 +350,15 @@ def run_redesign(
             target["title"],
             get_role_task_titles(target),
             user_skills=user_skills,
+            feedback_addendum=feedback_addendum,
         )
         core_tasks_out = target["core_tasks"]
     else:
         suggestions = generate_redesign_suggestions(
-            role["title"], get_role_task_titles(role), user_skills=user_skills
+            role["title"],
+            get_role_task_titles(role),
+            user_skills=user_skills,
+            feedback_addendum=feedback_addendum,
         )
         core_tasks_out = role["core_tasks"]
 

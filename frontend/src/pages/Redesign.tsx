@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent, FormEvent } from "react";
 import { api, ApiError } from "../api/client";
+import { makePlanId, savedPlansStore } from "../lib/savedPlans";
+import type { SavedPlan } from "../lib/savedPlans";
 import type {
   CareerMatch,
   RedesignResult,
@@ -13,9 +15,9 @@ import type {
 } from "../types";
 
 const IMPACT_STYLES: Record<string, { label: string; cls: string }> = {
-  augment: { label: "Augment", cls: "badge-success" },
-  automate: { label: "Automate", cls: "badge-warning" },
-  transform: { label: "Transform", cls: "badge-danger" },
+  augment: { label: "AI helps you", cls: "badge-success" },
+  automate: { label: "AI handles the routine parts", cls: "badge-warning" },
+  transform: { label: "Your role evolves", cls: "badge-danger" },
 };
 
 function aiScoreBadge(score: number): { label: string; cls: string } {
@@ -58,11 +60,43 @@ export default function Redesign() {
   const resultsRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Saved plans (Phase 3 — device bookmarks now; moves to user accounts later)
+  const [savedPlans, setSavedPlans] = useState<SavedPlan[]>([]);
+  const [savedFlash, setSavedFlash] = useState(false);
+  // Last request context — powers "Regenerate" and saving the request
+  const lastRequestRef = useRef<{ role: string; userSkills?: string[]; targetRole?: string } | null>(null);
+  // Staged loading messages (reduce anxiety during long AI calls)
+  const [stageIdx, setStageIdx] = useState(0);
+
   useEffect(() => {
     api.get<RoleListResponse>("/api/roles")
       .then(res => setRoles(res.roles))
       .catch(() => {});
+    setSavedPlans(savedPlansStore.list());
   }, []);
+
+  const busy = loading || analyzing;
+  useEffect(() => {
+    if (!busy) {
+      setStageIdx(0);
+      return;
+    }
+    const t = setInterval(() => setStageIdx(i => i + 1), 7000);
+    return () => clearInterval(t);
+  }, [busy]);
+
+  const analyzeStages = [
+    "Reading your resume\u2026",
+    "Picking out your skills\u2026",
+    "Looking for careers that fit what you already do\u2026",
+  ];
+  const generateStages = [
+    `Looking at how AI is changing ${roleInput.trim() || "this role"}\u2026`,
+    "Building options around the skills you already have\u2026",
+    "Finding SkillsFuture-funded courses to close the gaps\u2026",
+  ];
+  const stages = analyzing ? analyzeStages : generateStages;
+  const stageMsg = stages[Math.min(stageIdx, stages.length - 1)];
 
   // Fetch user-level funding eligibility once we have an analysis + age
   useEffect(() => {
@@ -98,6 +132,12 @@ export default function Redesign() {
     if (targetRole && targetRole.trim() && targetRole.trim().toLowerCase() !== roleTitle.trim().toLowerCase()) {
       body.target_role = targetRole.trim();
     }
+    // Remember the request so we can regenerate or bookmark it
+    lastRequestRef.current = {
+      role: roleTitle.trim(),
+      userSkills,
+      targetRole: typeof body.target_role === "string" ? body.target_role : undefined,
+    };
 
     api.post<RedesignResult>("/api/redesign", body)
       .then(res => {
@@ -174,6 +214,57 @@ export default function Redesign() {
     }
   }
 
+  // ── Saved plans + regenerate (Phase 3) ───────────────────────────────────
+
+  function handleRegenerate() {
+    const last = lastRequestRef.current;
+    if (!last) return;
+    generateFor(last.role, last.userSkills, last.targetRole);
+  }
+
+  function handleSavePlan() {
+    if (!result) return;
+    const last = lastRequestRef.current;
+    const plan: SavedPlan = {
+      id: makePlanId(),
+      saved_at: new Date().toISOString(),
+      role: last?.role ?? result.role,
+      target_role: result.target_role ?? null,
+      age: age ? Number(age) : null,
+      user_skills: last?.userSkills,
+      result,
+    };
+    savedPlansStore.save(plan);
+    setSavedPlans(savedPlansStore.list());
+    setSavedFlash(true);
+    setTimeout(() => setSavedFlash(false), 2000);
+  }
+
+  function handleOpenPlan(plan: SavedPlan) {
+    setResult(plan.result);
+    setAnalysis(null);
+    setError(null);
+    setRoleInput(plan.role);
+    if (plan.target_role) {
+      setWantTarget(true);
+      setTargetInput(plan.target_role);
+    } else {
+      setWantTarget(false);
+    }
+    if (plan.age) setAge(String(plan.age));
+    lastRequestRef.current = {
+      role: plan.role,
+      userSkills: plan.user_skills,
+      targetRole: plan.target_role ?? undefined,
+    };
+    setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+  }
+
+  function handleDeletePlan(id: string) {
+    savedPlansStore.remove(id);
+    setSavedPlans(savedPlansStore.list());
+  }
+
   return (
     <>
       {/* Hero / Input */}
@@ -184,8 +275,8 @@ export default function Redesign() {
             How will AI change <span style={{ color: "var(--purple-600)" }}>your role?</span>
           </h1>
           <p style={{ fontSize: "1.15rem", maxWidth: 580, margin: "0 auto 2rem" }}>
-            Type your job title or upload your resume. Get AI-augmented redesign directions,
-            matched SkillsFuture courses, and the funding schemes you're eligible for.
+            Type your job title or upload your resume. We'll show you ways to reshape
+            your job around AI, plus SkillsFuture courses and the funding you can claim.
           </p>
 
           {/* Mode tabs */}
@@ -364,13 +455,40 @@ export default function Redesign() {
 
               {analyzing && (
                 <p className="muted" style={{ marginTop: "1rem" }}>
-                  AI is reading your resume, extracting skills, and matching careers…
+                  {stageMsg}
                 </p>
               )}
             </div>
           )}
         </div>
       </section>
+
+      {/* Saved plans (bookmarks) */}
+      {savedPlans.length > 0 && (
+        <div className="container" style={{ paddingTop: "0.5rem" }}>
+          <div className="card" style={{ background: "var(--bg-subtle)" }}>
+            <strong style={{ fontSize: "0.95rem" }}>Your saved plans</strong>
+            <div className="stack" style={{ marginTop: "0.5rem" }}>
+              {savedPlans.map(p => (
+                <div key={p.id} className="row-between" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
+                  <div>
+                    <strong style={{ fontSize: "0.9rem" }}>
+                      {p.role}{p.target_role ? ` → ${p.target_role}` : ""}
+                    </strong>
+                    <span className="muted" style={{ marginLeft: "0.6rem", fontSize: "0.78rem" }}>
+                      Saved {new Date(p.saved_at).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                    </span>
+                  </div>
+                  <div className="row" style={{ gap: "0.4rem" }}>
+                    <button className="btn btn-secondary btn-sm" onClick={() => handleOpenPlan(p)}>Open</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => handleDeletePlan(p.id)}>Remove</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Error */}
       {error && (
@@ -379,10 +497,16 @@ export default function Redesign() {
         </div>
       )}
 
-      {/* Loading hint (redesign generation) */}
+      {/* Loading hint (redesign generation) — staged messages */}
       {loading && (
         <div className="container" style={{ textAlign: "center", padding: "2rem 0" }}>
-          <p className="muted">AI is analysing how this role changes and matching SkillsFuture courses…</p>
+          <div className="row" style={{ justifyContent: "center", gap: "0.6rem" }}>
+            <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />
+            <p className="muted" style={{ margin: 0 }}>{stageMsg}</p>
+          </div>
+          <p className="muted" style={{ marginTop: "0.5rem", fontSize: "0.8rem" }}>
+            This usually takes 20–40 seconds.
+          </p>
         </div>
       )}
 
@@ -467,14 +591,23 @@ export default function Redesign() {
                 {result.target_role && result.target_role_category && (
                   <span className="badge badge-outline">Target: {result.target_role_category}</span>
                 )}
-                <span className="muted">{result.suggestions.length} {result.target_role ? "transition pathways" : "redesign directions"}</span>
+                <span className="muted">{result.suggestions.length} {result.target_role ? "transition pathways" : "plan options"}</span>
+              </div>
+              {/* Plan actions: save (bookmark) + regenerate */}
+              <div className="row" style={{ gap: "0.5rem", marginTop: "0.75rem" }}>
+                <button className="btn btn-secondary btn-sm" onClick={handleSavePlan}>
+                  {savedFlash ? "Saved ✓" : "Save this plan"}
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={handleRegenerate} disabled={loading}>
+                  ↻ Regenerate
+                </button>
               </div>
               {result.role_core_tasks.length > 0 && (
                 <details style={{ marginTop: "0.75rem" }}>
                   <summary className="muted" style={{ cursor: "pointer", fontWeight: 600 }}>
                     {result.target_role
-                      ? "Core tasks for your target role (with AI impact)"
-                      : "Core tasks for this role (with AI impact)"}
+                      ? "What your target role does day-to-day (and how much AI can help)"
+                      : "What this job does day-to-day (and how much AI can help)"}
                   </summary>
                   <ul style={{ marginTop: "0.5rem", color: "var(--ink-700)", paddingLeft: "1.5rem", listStyle: "none" }}>
                     {result.role_core_tasks.map((t, i) => <TaskRow key={i} task={t} />)}
@@ -486,15 +619,16 @@ export default function Redesign() {
             {/* Suggestion cards */}
             <div className="stack">
               {result.suggestions.map((s, i) => (
-                <SuggestionCard key={i} suggestion={s} />
+                <SuggestionCard key={i} suggestion={s} role={result.role} targetRole={result.target_role} />
               ))}
             </div>
 
             {/* Disclaimer */}
             <div className="notice" style={{ marginTop: "2rem", fontSize: "0.85rem" }}>
-              Scheme eligibility is estimated using heuristics for this prototype. Always verify on{" "}
+              The funding shown here is an estimate based on your age. Before you sign up for a course,
+              double-check exactly what you can claim on{" "}
               <a href="https://www.myskillsfuture.gov.sg" target="_blank" rel="noopener noreferrer">MySkillsFuture</a>{" "}
-              before enrolling. Schemes change every Budget cycle.
+              — schemes change with each national Budget.
             </div>
           </div>
         )}
@@ -509,7 +643,9 @@ function TaskRow({ task }: { task: TaskWithScore }) {
   return (
     <li style={{ marginBottom: "0.4rem", display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
       <span>{task.task}</span>
-      <span className={`badge ${badge.cls}`} style={{ fontSize: "0.68rem" }}>{badge.label}</span>
+      <span className={`badge ${badge.cls}`} style={{ fontSize: "0.68rem" }} title="How much of this task AI could help with">
+        {badge.label}
+      </span>
     </li>
   );
 }
@@ -620,8 +756,8 @@ function CareerMatchCard({ match, onSelect, disabled }: { match: CareerMatch; on
           <h3 style={{ fontSize: "1.2rem", margin: 0 }}>{match.role_title}</h3>
           <span className="badge badge-outline">{match.category}</span>
           {match.industry_switch && (
-            <span className="badge badge-warning" title="This career is in a different industry from your current role">
-              Industry switch
+            <span className="badge badge-warning" title="This is a different industry from your current job — but your skills still fit">
+              New industry
             </span>
           )}
         </div>
@@ -660,9 +796,31 @@ function CareerMatchCard({ match, onSelect, disabled }: { match: CareerMatch; on
 }
 
 
-function SuggestionCard({ suggestion }: { suggestion: RedesignSuggestion }) {
+function SuggestionCard({ suggestion, role, targetRole }: {
+  suggestion: RedesignSuggestion;
+  role: string;
+  targetRole?: string | null;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const [fbState, setFbState] = useState<"idle" | "comment" | "sending" | "done">("idle");
+  const [fbComment, setFbComment] = useState("");
   const impact = IMPACT_STYLES[suggestion.ai_impact] || IMPACT_STYLES.augment;
+
+  async function sendFeedback(rating: "helpful" | "not_right", comment?: string) {
+    setFbState("sending");
+    try {
+      await api.post("/api/feedback", {
+        role,
+        target_role: targetRole ?? null,
+        suggestion_title: suggestion.title,
+        rating,
+        comment: comment?.trim() || null,
+      });
+      setFbState("done");
+    } catch {
+      setFbState("idle");
+    }
+  }
 
   return (
     <div className="card">
@@ -738,6 +896,45 @@ function SuggestionCard({ suggestion }: { suggestion: RedesignSuggestion }) {
           )}
         </div>
       )}
+
+      {/* Feedback (Phase 3) */}
+      <div style={{ marginTop: "0.75rem", borderTop: "1px solid var(--border)", paddingTop: "0.75rem" }}>
+        {fbState === "done" ? (
+          <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>
+            Thanks — your feedback is shaping future suggestions.
+          </p>
+        ) : fbState === "comment" ? (
+          <div>
+            <textarea
+              value={fbComment}
+              onChange={e => setFbComment(e.target.value)}
+              placeholder="Optional: what didn't feel right? (e.g. too technical, not my industry…)"
+              rows={2}
+              style={{ width: "100%", fontSize: "0.85rem", marginBottom: "0.5rem" }}
+            />
+            <div className="row" style={{ gap: "0.4rem" }}>
+              <button
+                className="btn btn-primary btn-sm"
+                disabled={fbState === "sending"}
+                onClick={() => sendFeedback("not_right", fbComment)}
+              >
+                {fbState === "sending" ? "Sending…" : "Send feedback"}
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setFbState("idle")}>Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <div className="row" style={{ gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+            <span className="muted" style={{ fontSize: "0.85rem" }}>Was this option helpful?</span>
+            <button className="btn btn-ghost btn-sm" disabled={fbState === "sending"} onClick={() => sendFeedback("helpful")}>
+              👍 Helpful
+            </button>
+            <button className="btn btn-ghost btn-sm" disabled={fbState === "sending"} onClick={() => setFbState("comment")}>
+              👎 Doesn't feel right for my role
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

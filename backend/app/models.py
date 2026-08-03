@@ -84,3 +84,18 @@ class Course(Base):
     image_url: Mapped[str] = mapped_column(String(1000), default="")
     skills: Mapped[str] = mapped_column(Text, default="")
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+# ── Suggestion feedback (Phase 3) ────────────────────────────────────────────────────────
+
+class SuggestionFeedback(Base):
+    """User feedback on AI suggestions — used to steer future prompts."""
+    __tablename__ = "suggestion_feedback"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    role: Mapped[str] = mapped_column(String(255), index=True)
+    target_role: Mapped[str] = mapped_column(String(255), default="")
+    suggestion_title: Mapped[str] = mapped_column(String(500))
+    rating: Mapped[str] = mapped_column(String(20), index=True)  # "helpful" | "not_right"
+    comment: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

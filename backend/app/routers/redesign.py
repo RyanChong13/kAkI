@@ -4,6 +4,7 @@
 ``POST /api/redesign``         — generate AI redesign suggestions + matched courses/schemes
 ``POST /api/resume/analyze``   — upload a resume PDF → skills + ranked career matches
 ``GET  /api/schemes/eligibility`` — user-level SkillsFuture scheme eligibility by age
+``POST /api/feedback``         — record user feedback on a suggestion (Phase 3)
 
 No auth required — the redesign tool is open so anyone can try it.
 """
@@ -14,9 +15,12 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models import SuggestionFeedback
 from app.schemas import (
     CareerMatch,
     CourseOut,
+    FeedbackIn,
+    FeedbackOut,
     MatchedCourseOut,
     RedesignRequest,
     RedesignResult,
@@ -147,3 +151,23 @@ def get_schemes_eligibility(age: int | None = Query(default=None, ge=0, le=120))
     access at their age (credits, SCTP subsidy tier, Level-Up).
     """
     return [SchemeInfo(**s) for s in get_user_schemes(age)]
+
+
+@router.post("/feedback", response_model=FeedbackOut)
+def post_feedback(payload: FeedbackIn, db: Session = Depends(get_db)):
+    """Record feedback on an AI suggestion.
+
+    Negative feedback ("not_right") is fed back into future prompts so
+    similar suggestions are avoided.  No auth required.
+    """
+    fb = SuggestionFeedback(
+        role=payload.role,
+        target_role=payload.target_role or "",
+        suggestion_title=payload.suggestion_title,
+        rating=payload.rating,
+        comment=(payload.comment or "").strip(),
+    )
+    db.add(fb)
+    db.commit()
+    db.refresh(fb)
+    return FeedbackOut(id=fb.id)

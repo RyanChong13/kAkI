@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -174,3 +175,18 @@ class ResumeAnalysis(BaseModel):
     skills: list[str]
     current_role_guess: str
     career_matches: list[CareerMatch]
+
+
+# ── Suggestion Feedback (Phase 3) ───────────────────────────────────────────────────
+
+class FeedbackIn(BaseModel):
+    role: str = Field(min_length=1)
+    target_role: str | None = None
+    suggestion_title: str = Field(min_length=1)
+    rating: Literal["helpful", "not_right"]
+    comment: str | None = Field(default=None, max_length=1000)
+
+
+class FeedbackOut(BaseModel):
+    id: int
+    status: str = "thanks"

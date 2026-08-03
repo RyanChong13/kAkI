@@ -244,6 +244,9 @@ Guidelines:
 - Prefer a mix: at least one same-industry option and at least one cross-industry
   option when the skills plausibly transfer.
 - Be realistic — a fit_score above 85 should only be given to very strong matches.
+- Language: write the "reason" in plain, warm, everyday words. The reader is \
+worried about their job's future — be reassuring and practical. No jargon or \
+buzzwords. Short sentences.
 
 Return ONLY a JSON array, no markdown, no explanation."""
 
