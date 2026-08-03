@@ -29,6 +29,11 @@ class NormalizedCourse:
     full_price_sgd: float = 0.0  # full course fee before subsidy
     skillsfuture_credit_eligible: bool = False
     skillsfuture_credit_amount: float = 0.0  # subsidy amount
+    # SkillsFuture scheme eligibility (heuristic — see services/scheme_rules.py)
+    base_credit_eligible: bool = True
+    mid_career_eligible: bool = False
+    sctp_eligible: bool = False
+    level_up_eligible: bool = False
     location: str = "Singapore"
     url: str = ""
     image_url: str = ""

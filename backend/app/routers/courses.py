@@ -3,12 +3,10 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user
 from app.database import get_db
-from app.models import Course, CourseSource, ResumeProfile, User
-from app.schemas import CourseListResponse, CourseOut, CourseRecommendation, UpskillGoalIn
-from app.services.course_service import get_provider_status, list_courses, refresh_all_sources
-from app.services.matching_service import match_courses
+from app.models import Course, CourseSource
+from app.schemas import CourseListResponse, CourseOut
+from app.services.course_service import list_courses, refresh_all_sources
 
 router = APIRouter(prefix="/api/courses", tags=["courses"])
 
@@ -50,22 +48,6 @@ def get_categories(db: Session = Depends(get_db)):
 def get_providers(db: Session = Depends(get_db)):
     rows = db.query(Course.provider).distinct().order_by(Course.provider).all()
     return [r[0] for r in rows]
-
-
-@router.post("/recommendations", response_model=list[CourseRecommendation])
-def get_course_recommendations(
-    payload: UpskillGoalIn, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
-):
-    """Diagram step: user prompts AI with goal/time/cost/scope, AI recommends courses to choose from."""
-    profile = db.query(ResumeProfile).filter(ResumeProfile.user_id == current_user.id).first()
-    user_skills = [s.strip() for s in profile.extracted_skills.split(",")] if profile and profile.extracted_skills else []
-
-    courses = list_courses(db)
-    ranked = match_courses(payload.goal_text, payload.scope, user_skills, courses, max_cost_sgd=payload.max_cost_sgd)
-    return [
-        CourseRecommendation(course=CourseOut.model_validate(course), match_score=score, matched_skills=skills)
-        for course, score, skills in ranked
-    ]
 
 
 @router.get("/{course_id}", response_model=CourseOut)

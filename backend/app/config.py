@@ -25,6 +25,13 @@ class Settings(BaseSettings):
     skillsfuture_crawl_max_pages: int = 4  # pages per query term
     skillsfuture_crawl_concurrency: int = 6  # concurrent page fetches
 
+    # LLM — required for role redesign feature.
+    # Set OPENAI_API_KEY or ANTHROPIC_API_KEY (OpenAI takes priority if both set).
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4o"
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-sonnet-4-20250514"
+
     @property
     def skillsfuture_crawl_query_list(self) -> list[str]:
         return [q.strip() for q in self.skillsfuture_crawl_queries.split(",") if q.strip()]

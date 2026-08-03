@@ -11,7 +11,7 @@ export default function Navbar() {
 
   function handleLogout() {
     logout();
-    navigate("/login");
+    navigate("/");
   }
 
   function toggleTheme() {
@@ -28,20 +28,8 @@ export default function Navbar() {
         </NavLink>
 
         <nav className="row" style={{ gap: "1rem" }}>
+          <NavLink to="/" className="muted" style={navStyle} end>Redesign</NavLink>
           <NavLink to="/courses" className="muted" style={navStyle}>Courses</NavLink>
-          {user && (
-            user.role === "organiser" ? (
-              <>
-                <NavLink to="/organiser" className="muted" style={navStyle}>Dashboard</NavLink>
-              </>
-            ) : (
-              <>
-                <NavLink to="/dashboard" className="muted" style={navStyle}>Dashboard</NavLink>
-                <NavLink to="/growth-plan" className="muted" style={navStyle}>Growth Plan</NavLink>
-                <NavLink to="/learning-journey" className="muted" style={navStyle}>Journey</NavLink>
-              </>
-            )
-          )}
         </nav>
 
         <div className="row" style={{ gap: "0.75rem" }}>
@@ -50,12 +38,7 @@ export default function Navbar() {
           </button>
           {user ? (
             <>
-              <NavLink
-                to={user.role === "organiser" ? "/organiser/profile" : "/profile"}
-                className="btn btn-ghost btn-sm"
-              >
-                {user.name || user.email}
-              </NavLink>
+              <span className="muted" style={{ fontSize: "0.85rem" }}>{user.name || user.email}</span>
               <button className="btn btn-ghost btn-sm" onClick={handleLogout}>Log out</button>
             </>
           ) : (

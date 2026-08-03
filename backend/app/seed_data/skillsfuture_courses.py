@@ -367,4 +367,10 @@ SEEDED_SKILLSFUTURE_COURSES = [
 
 
 def load_seeded_courses() -> list[dict]:
-    return SEEDED_SKILLSFUTURE_COURSES
+    from app.services.scheme_rules import tag_scheme_eligibility
+
+    result: list[dict] = []
+    for c in SEEDED_SKILLSFUTURE_COURSES:
+        schemes = tag_scheme_eligibility(c.get("full_price_sgd", 0.0), c.get("duration_hours"))
+        result.append({**c, **schemes})
+    return result

@@ -45,6 +45,10 @@ def _upsert_course(db: Session, item: NormalizedCourse) -> None:
         existing.full_price_sgd = item.full_price_sgd
         existing.skillsfuture_credit_eligible = item.skillsfuture_credit_eligible
         existing.skillsfuture_credit_amount = item.skillsfuture_credit_amount
+        existing.base_credit_eligible = item.base_credit_eligible
+        existing.mid_career_eligible = item.mid_career_eligible
+        existing.sctp_eligible = item.sctp_eligible
+        existing.level_up_eligible = item.level_up_eligible
         existing.location = item.location
         existing.url = item.url
         existing.image_url = item.image_url
@@ -64,6 +68,10 @@ def _upsert_course(db: Session, item: NormalizedCourse) -> None:
                 full_price_sgd=item.full_price_sgd,
                 skillsfuture_credit_eligible=item.skillsfuture_credit_eligible,
                 skillsfuture_credit_amount=item.skillsfuture_credit_amount,
+                base_credit_eligible=item.base_credit_eligible,
+                mid_career_eligible=item.mid_career_eligible,
+                sctp_eligible=item.sctp_eligible,
+                level_up_eligible=item.level_up_eligible,
                 location=item.location,
                 url=item.url,
                 image_url=item.image_url,

@@ -32,6 +32,7 @@ import re
 import httpx
 
 from app.config import get_settings
+from app.services.scheme_rules import tag_scheme_eligibility
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +161,8 @@ def normalize_course(raw: dict) -> dict:
 
     url = COURSE_URL_TEMPLATE.format(ref=ref, seo=seo) if ref else ""
 
+    schemes = tag_scheme_eligibility(full_fee, None)  # duration unknown from search results
+
     return {
         "external_id": ref,
         "title": str(raw.get("courseTitle", "")).strip(),
@@ -171,6 +174,7 @@ def normalize_course(raw: dict) -> dict:
         "full_price_sgd": round(full_fee, 2),  # full course fee before subsidy
         "skillsfuture_credit_eligible": True,
         "skillsfuture_credit_amount": round(subsidy, 2),  # subsidy amount
+        **schemes,
         "skills": skills[:10],
         "url": url,
     }

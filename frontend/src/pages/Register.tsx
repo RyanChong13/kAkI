@@ -9,7 +9,6 @@ export default function Register() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"public" | "organiser">("public");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -18,12 +17,8 @@ export default function Register() {
     setError(null);
     setLoading(true);
     try {
-      const newUser = await register(email, password, name, role);
-      if (newUser.role === "organiser") {
-        navigate("/organiser");
-      } else {
-        navigate("/onboarding");
-      }
+      await register(email, password, name);
+      navigate("/");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
     } finally {
@@ -36,7 +31,7 @@ export default function Register() {
       <div className="container">
         <div className="card center-form">
           <h2>Create your account</h2>
-          <p className="muted">Join Nexa — your AI-powered growth platform.</p>
+          <p className="muted">Create an account to save your redesign results.</p>
 
           {error && <div className="notice notice-error">{error}</div>}
 
@@ -60,25 +55,6 @@ export default function Register() {
                 required
               />
               <span className="muted">At least 8 characters.</span>
-            </div>
-            <div className="field">
-              <label>I am a...</label>
-              <div className="row" style={{ gap: "0.5rem" }}>
-                <button
-                  type="button"
-                  className={`btn ${role === "public" ? "btn-primary" : "btn-ghost"} btn-sm`}
-                  onClick={() => setRole("public")}
-                >
-                  Public User
-                </button>
-                <button
-                  type="button"
-                  className={`btn ${role === "organiser" ? "btn-primary" : "btn-ghost"} btn-sm`}
-                  onClick={() => setRole("organiser")}
-                >
-                  Event Organiser
-                </button>
-              </div>
             </div>
             <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
               {loading ? "Creating account…" : "Create account"}

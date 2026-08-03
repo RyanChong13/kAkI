@@ -13,7 +13,6 @@ export interface User {
   preferred_timings: string;
   availability_hours_per_week: number;
   budget_sgd: number;
-  // Organiser-specific
   company_name?: string;
   bio?: string;
   website?: string;
@@ -26,83 +25,9 @@ export interface AuthResponse {
   user: User;
 }
 
-// ── AI Features ───────────────────────────────────────────────────────────────
+// ── Course ────────────────────────────────────────────────────────────────────
 
-export interface GrowthPlanDay {
-  day: number;
-  date_label: string;
-  activities: Array<{
-    event_id: number;
-    title: string;
-    type: string;
-    time: string;
-    duration_hours: number;
-    location: string;
-    explanation: string;
-    category: string;
-  }>;
-}
-
-export interface GrowthPlanOut {
-  id: number;
-  plan_type: string;
-  days: GrowthPlanDay[];
-  created_at: string;
-}
-
-export interface LearningJourneyWeek {
-  week: number;
-  title: string;
-  events: any[];
-  focus: string;
-}
-
-export interface LearningJourneyOut {
-  id: number;
-  goal: string;
-  current_week: number;
-  total_weeks: number;
-  roadmap: LearningJourneyWeek[];
-  created_at: string;
-}
-
-export interface AIListingResult {
-  title: string;
-  description: string;
-  category: string;
-  tags: string[];
-  skills: string[];
-  seo_keywords: string[];
-  difficulty: string;
-  recommended_audience: string;
-  duration_hours: number | null;
-  price_suggestion_sgd: number;
-}
-
-export interface ChatResponse {
-  reply: string;
-  language: string;
-}
-
-// ── Organiser ─────────────────────────────────────────────────────────────────
-
-export interface OrganiserDashboardStats {
-  total_events: number;
-  total_attendees: number;
-  avg_rating: number;
-  upcoming_events: number;
-  revenue_sgd: number;
-  monthly_growth: Array<{
-    month: string;
-    events: number;
-    attendees: number;
-    revenue: number;
-  }>;
-}
-
-// ── Legacy ────────────────────────────────────────────────────────────────────
-
-export type CourseSource = "skillsfuture" | "eventbrite";
+export type CourseSource = "skillsfuture";
 
 export interface Course {
   id: number;
@@ -114,10 +39,14 @@ export interface Course {
   category: string;
   date: string | null;
   duration_hours: number | null;
-  price_sgd: number;  // estimated payable after subsidy
-  full_price_sgd: number;  // full course fee before subsidy
+  price_sgd: number;
+  full_price_sgd: number;
   skillsfuture_credit_eligible: boolean;
-  skillsfuture_credit_amount: number;  // subsidy amount
+  skillsfuture_credit_amount: number;
+  base_credit_eligible: boolean;
+  mid_career_eligible: boolean;
+  sctp_eligible: boolean;
+  level_up_eligible: boolean;
   location: string;
   url: string;
   image_url: string;
@@ -130,18 +59,58 @@ export interface CourseListResponse {
   total: number;
 }
 
-export interface ResumeProfile {
-  filename: string;
-  extracted_name: string;
-  extracted_skills: string;
-  years_experience_guess: number | null;
-  uploaded_at: string;
+// ── Role Taxonomy ─────────────────────────────────────────────────────────────
+
+export interface RoleOut {
+  id: string;
+  title: string;
+  category: string;
+  core_tasks: string[];
 }
 
-export interface GrantApplicationOut {
-  id: number;
-  course_id: number;
-  credit_amount_sgd: number;
-  status: string;
-  created_at: string;
+export interface RoleListResponse {
+  categories: string[];
+  roles: RoleOut[];
+}
+
+// ── Redesign ──────────────────────────────────────────────────────────────────
+
+export interface RedesignRequest {
+  role: string;
+  age?: number;
+}
+
+export interface SchemeInfo {
+  scheme_id: string;
+  scheme_name: string;
+  eligible: boolean;
+  credit_amount_sgd: number | null;
+  description: string;
+  eligibility_notes: string;
+  age_note: string;
+  official_url: string;
+}
+
+export interface MatchedCourseOut {
+  course: Course;
+  match_score: number;
+  matched_skills: string[];
+  schemes: SchemeInfo[];
+}
+
+export interface RedesignSuggestion {
+  title: string;
+  description: string;
+  why: string;
+  ai_impact: string;
+  upskilling_areas: string[];
+  estimated_timeframe: string;
+  matched_courses: MatchedCourseOut[];
+}
+
+export interface RedesignResult {
+  role: string;
+  role_category: string;
+  role_core_tasks: string[];
+  suggestions: RedesignSuggestion[];
 }
