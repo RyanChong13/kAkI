@@ -61,11 +61,16 @@ export interface CourseListResponse {
 
 // ── Role Taxonomy ─────────────────────────────────────────────────────────────
 
+export interface TaskWithScore {
+  task: string;
+  ai_augmentable: number;
+}
+
 export interface RoleOut {
   id: string;
   title: string;
   category: string;
-  core_tasks: string[];
+  core_tasks: TaskWithScore[];
 }
 
 export interface RoleListResponse {
@@ -78,6 +83,8 @@ export interface RoleListResponse {
 export interface RedesignRequest {
   role: string;
   age?: number;
+  user_skills?: string[];
+  target_role?: string;
 }
 
 export interface SchemeInfo {
@@ -105,12 +112,35 @@ export interface RedesignSuggestion {
   ai_impact: string;
   upskilling_areas: string[];
   estimated_timeframe: string;
+  transferable_skills: string[];
+  skill_gaps: string[];
   matched_courses: MatchedCourseOut[];
 }
 
 export interface RedesignResult {
   role: string;
   role_category: string;
-  role_core_tasks: string[];
+  role_core_tasks: TaskWithScore[];
+  target_role?: string | null;
+  target_role_category?: string | null;
   suggestions: RedesignSuggestion[];
+}
+
+// ── Resume Analysis ─────────────────────────────────────────────────────────────
+
+export interface CareerMatch {
+  role_id: string;
+  role_title: string;
+  category: string;
+  fit_score: number;
+  reason: string;
+  transferable_skills: string[];
+  skill_gaps: string[];
+  industry_switch: boolean;
+}
+
+export interface ResumeAnalysis {
+  skills: string[];
+  current_role_guess: string;
+  career_matches: CareerMatch[];
 }

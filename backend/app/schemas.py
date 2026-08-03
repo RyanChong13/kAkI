@@ -92,11 +92,16 @@ class CourseListResponse(BaseModel):
 
 # ── Role Taxonomy ──────────────────────────────────────────────────────────────
 
+class TaskWithScore(BaseModel):
+    task: str
+    ai_augmentable: int = Field(ge=0, le=100)
+
+
 class RoleOut(BaseModel):
     id: str
     title: str
     category: str
-    core_tasks: list[str]
+    core_tasks: list[TaskWithScore]
 
 
 class RoleListResponse(BaseModel):
@@ -109,6 +114,8 @@ class RoleListResponse(BaseModel):
 class RedesignRequest(BaseModel):
     role: str = Field(min_length=1, description="Role title, ID, or free text")
     age: int | None = Field(default=None, ge=0, le=120, description="User age for scheme eligibility")
+    user_skills: list[str] | None = Field(default=None, description="Skills extracted from the user's resume, for personalised suggestions")
+    target_role: str | None = Field(default=None, description="Optional role the user wants to transition to; omit when they're not sure")
 
 
 class SchemeInfo(BaseModel):
@@ -136,11 +143,34 @@ class RedesignSuggestion(BaseModel):
     ai_impact: str  # augment | automate | transform
     upskilling_areas: list[str]
     estimated_timeframe: str
+    transferable_skills: list[str] = []
+    skill_gaps: list[str] = []
     matched_courses: list[MatchedCourseOut]
 
 
 class RedesignResult(BaseModel):
     role: str
     role_category: str
-    role_core_tasks: list[str]
+    role_core_tasks: list[TaskWithScore]
+    target_role: str | None = None
+    target_role_category: str | None = None
     suggestions: list[RedesignSuggestion]
+
+
+# ── Resume Analysis ───────────────────────────────────────────────────────────────────────────────
+
+class CareerMatch(BaseModel):
+    role_id: str
+    role_title: str
+    category: str
+    fit_score: int = Field(ge=0, le=100)
+    reason: str
+    transferable_skills: list[str]
+    skill_gaps: list[str]
+    industry_switch: bool = False
+
+
+class ResumeAnalysis(BaseModel):
+    skills: list[str]
+    current_role_guess: str
+    career_matches: list[CareerMatch]

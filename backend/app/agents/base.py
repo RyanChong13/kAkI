@@ -70,6 +70,57 @@ def _call_openai(settings, system_prompt, user_message, max_tokens):
     return _parse_json_response(text)
 
 
+def call_agent_with_images(
+    system_prompt: str,
+    user_message: str,
+    images: list[bytes],
+    *,
+    max_tokens: int = 4096,
+) -> dict | list:
+    """Like ``call_agent`` but attaches PNG/JPEG images to the request.
+
+    Used for vision tasks (e.g. transcribing a scanned resume).  Requires
+    an OpenAI key — the vision-capable path.  Raises ``RuntimeError`` if no
+    OpenAI key is configured.
+    """
+    settings = get_settings()
+
+    if not settings.openai_api_key:
+        raise RuntimeError(
+            "Image analysis requires an OpenAI API key. Set OPENAI_API_KEY "
+            "in your .env file (see .env.example)."
+        )
+
+    from openai import OpenAI
+    import base64
+
+    client = OpenAI(api_key=settings.openai_api_key)
+
+    content: list[dict] = [{"type": "text", "text": user_message}]
+    for image_bytes in images:
+        encoded = base64.b64encode(image_bytes).decode("ascii")
+        content.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/png;base64,{encoded}"},
+        })
+
+    logger.info("Calling OpenAI (%s) with %d image(s) — %d char system prompt",
+                settings.openai_model, len(images), len(system_prompt))
+
+    response = client.chat.completions.create(
+        model=settings.openai_model,
+        max_tokens=max_tokens,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": content},
+        ],
+    )
+
+    text = response.choices[0].message.content or ""
+    logger.info("OpenAI vision responded — %d chars", len(text))
+    return _parse_json_response(text)
+
+
 def _call_anthropic(settings, system_prompt, user_message, max_tokens):
     from anthropic import Anthropic
 

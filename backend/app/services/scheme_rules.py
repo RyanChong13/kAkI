@@ -122,6 +122,39 @@ def get_course_schemes(course, age: int | None = None) -> list[dict]:
     return results
 
 
+def get_user_schemes(age: int | None = None) -> list[dict]:
+    """Return user-level scheme eligibility based on age alone.
+
+    Unlike ``get_course_schemes`` this ignores course-level tagging — it
+    tells the user which national SkillsFuture schemes they could access
+    at their age, before they've picked any course.
+    """
+    results: list[dict] = []
+    for scheme in SCHEMES:
+        age_eligible = True
+        age_note = ""
+        if age is not None and scheme["min_age"] is not None:
+            if age < scheme["min_age"]:
+                age_eligible = False
+                age_note = f"Requires age {scheme['min_age']}+; you are {age}."
+            else:
+                age_note = f"You meet the age requirement ({scheme['min_age']}+)."
+        elif scheme["min_age"] is not None:
+            age_note = f"Requires age {scheme['min_age']}+."
+
+        results.append({
+            "scheme_id": scheme["id"],
+            "scheme_name": scheme["name"],
+            "eligible": age_eligible,
+            "credit_amount_sgd": scheme["credit_amount_sgd"],
+            "description": scheme["description"],
+            "eligibility_notes": scheme["eligibility_notes"],
+            "age_note": age_note,
+            "official_url": scheme["official_url"],
+        })
+    return results
+
+
 def _is_course_eligible(course, scheme_id: str) -> bool:
     """Check if a course is tagged as eligible for a given scheme."""
     field = _SCHEME_FIELD_MAP.get(scheme_id)
