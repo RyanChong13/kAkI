@@ -1,7 +1,6 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 const TOKEN_KEY = "nexa_token";
-const THEME_KEY = "nexa_theme";
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
@@ -10,15 +9,6 @@ export function getToken(): string | null {
 export function setToken(token: string | null) {
   if (token) localStorage.setItem(TOKEN_KEY, token);
   else localStorage.removeItem(TOKEN_KEY);
-}
-
-export function getTheme(): "light" | "dark" {
-  return (localStorage.getItem(THEME_KEY) as "light" | "dark") || "light";
-}
-
-export function setTheme(theme: "light" | "dark") {
-  localStorage.setItem(THEME_KEY, theme);
-  document.documentElement.setAttribute("data-theme", theme);
 }
 
 export class ApiError extends Error {

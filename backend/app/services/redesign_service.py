@@ -264,12 +264,21 @@ def match_courses_for_areas(
     courses: list[Course],
     limit: int = 5,
 ) -> list[tuple[Course, float, list[str]]]:
-    """Match upskilling areas against courses using keyword/skill overlap."""
-    area_tokens: set[str] = set()
-    for area in upskilling_areas:
-        area_tokens |= _tokenize(area)
+    """Match upskilling areas against courses using keyword/skill overlap.
 
-    if not area_tokens:
+    Returns (course, score, matched_areas) where *matched_areas* are the
+    full upskilling-area phrases whose tokens overlap with the course.
+    """
+    # Tokenise each area individually so we can trace back which area matched
+    area_token_maps: list[tuple[str, set[str]]] = []
+    area_tokens_all: set[str] = set()
+    for area in upskilling_areas:
+        tokens = _tokenize(area)
+        if tokens:
+            area_token_maps.append((area, tokens))
+            area_tokens_all |= tokens
+
+    if not area_tokens_all:
         return []
 
     scored: list[tuple[Course, float, list[str]]] = []
@@ -277,16 +286,19 @@ def match_courses_for_areas(
         course_skills = {s.strip().lower() for s in course.skills.split(",") if s.strip()}
         course_tokens = _tokenize(f"{course.title} {course.category} {course.description}") | course_skills
 
-        overlap = area_tokens & course_tokens
+        overlap = area_tokens_all & course_tokens
         if not overlap:
             continue
 
-        score = len(overlap) / max(len(area_tokens), 1)
-        matched = [s.strip() for s in course.skills.split(",") if s.strip().lower() in overlap]
-        if not matched:
-            matched = [t.title() for t in list(overlap)[:5]]
+        score = len(overlap) / max(len(area_tokens_all), 1)
 
-        scored.append((course, round(score, 3), matched))
+        # Show the full upskilling-area phrases that matched this course
+        matched: list[str] = [
+            area for area, area_tokens in area_token_maps
+            if area_tokens & course_tokens
+        ]
+
+        scored.append((course, round(score, 3), matched[:5]))
 
     scored.sort(key=lambda t: t[1], reverse=True)
     return scored[:limit]

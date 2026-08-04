@@ -34,20 +34,7 @@
   color-scheme: light;
 }
 
-[data-theme="dark"] {
-  --ink-900: #f0edfa;
-  --ink-700: #c8c3e0;
-  --ink-500: #9590ad;
-  --ink-300: #6b6580;
-  --border: #2d2a42;
 
-  --bg: #0f0d1a;
-  --bg-subtle: #16132a;
-  --bg-card: #1a1730;
-  --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 4px 20px rgba(0,0,0,0.3);
-  --shadow-lg: 0 4px 32px rgba(0,0,0,0.4);
-  color-scheme: dark;
-}
 
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
@@ -62,7 +49,8 @@ button, input, select, textarea { font-family: inherit; font-size: 1rem; }
 .container { max-width: 1200px; margin: 0 auto; padding: 0 1.5rem; }
 .page { padding: 2rem 0 4rem; min-height: calc(100vh - 64px); }
 
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; padding: 0.75rem 1.6rem; min-height: 46px; border-radius: 999px; border: 1.5px solid transparent; font-weight: 700; font-size: 0.92rem; cursor: pointer; transition: all 0.2s ease; letter-spacing: 0.01em; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; padding: 0.75rem 1.6rem; min-height: 46px; border-radius: 999px; border: 1.5px solid transparent; font-weight: 700; font-size: 0.92rem; cursor: pointer; transition: all 0.2s ease; letter-spacing: 0.01em; text-decoration: none; }
+.btn:hover:not(:disabled) { transform: scale(1.03); }
 .btn:active { transform: scale(0.98); }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .btn-sm { padding: 0.5rem 1.1rem; min-height: 36px; font-size: 0.84rem; }
@@ -118,8 +106,8 @@ label { display: block; font-weight: 700; font-size: 0.9rem; color: var(--ink-70
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ── Hero Section ─────────────────────────────────────────────── */
-.hero { padding: 6rem 0 4rem; text-align: center; background: linear-gradient(135deg, var(--purple-50) 0%, var(--bg) 100%); position: relative; overflow: hidden; }
-[data-theme="dark"] .hero { background: linear-gradient(135deg, #1a1040 0%, var(--bg) 100%); }
+.hero { padding: 6rem 0 4rem; text-align: center; background: linear-gradient(180deg, var(--purple-50) 0%, var(--bg) 100%); position: relative; overflow: hidden; }
+
 .hero h1 { font-size: 3.2rem; font-weight: 900; letter-spacing: -0.03em; margin-bottom: 1.25rem; }
 .hero p { font-size: 1.2rem; max-width: 640px; margin: 0 auto 2.5rem; font-weight: 500; }
 

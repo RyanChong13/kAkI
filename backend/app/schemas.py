@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -190,3 +190,27 @@ class FeedbackIn(BaseModel):
 class FeedbackOut(BaseModel):
     id: int
     status: str = "thanks"
+
+
+# ── Saved Redesign Plans (Phase 5 — per-user persistence) ──────────────────────
+
+class SavedRedesignCreate(BaseModel):
+    """Payload for saving a redesign result to the user's account."""
+    client_id: str = Field(default="", max_length=64)
+    role: str = Field(min_length=1)
+    target_role: str = ""
+    age: int | None = Field(default=None, ge=0, le=120)
+    user_skills: list[str] = []
+    result: dict[str, Any]  # full RedesignResult as JSON
+
+
+class SavedRedesignOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    client_id: str = ""
+    role: str
+    target_role: str = ""
+    age: int | None = None
+    user_skills: list[str] = []
+    result: dict[str, Any]
+    created_at: datetime

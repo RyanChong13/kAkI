@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent, FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { api, ApiError } from "../api/client";
-import { makePlanId, savedPlansStore } from "../lib/savedPlans";
+import { makePlanId, getStore, migrateLocalPlans } from "../lib/savedPlans";
 import type { SavedPlan } from "../lib/savedPlans";
+import { useAuth } from "../context/AuthContext";
 import type {
   CareerMatch,
   RedesignResult,
@@ -62,9 +64,17 @@ export default function Redesign() {
   // Incremented on mode switch so in-flight API calls can bail out
   const modeEpochRef = useRef(0);
 
-  // Saved plans (Phase 3 — device bookmarks now; moves to user accounts later)
+  // Saved plans (Phase 5 — login required to save)
+  const { user, login: authLogin } = useAuth();
+  const store = useMemo(() => getStore(!!user), [user]);
   const [savedPlans, setSavedPlans] = useState<SavedPlan[]>([]);
   const [savedFlash, setSavedFlash] = useState(false);
+  // Login modal (shown when anonymous user tries to save)
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginLoading, setLoginLoading] = useState(false);
   // Last request context — powers "Regenerate" and saving the request
   const lastRequestRef = useRef<{ role: string; userSkills?: string[]; targetRole?: string } | null>(null);
   // Staged loading messages (reduce anxiety during long AI calls)
@@ -76,8 +86,26 @@ export default function Redesign() {
     api.get<RoleListResponse>("/api/roles")
       .then(res => setRoles(res.roles))
       .catch(() => {});
-    setSavedPlans(savedPlansStore.list());
   }, []);
+
+  // Reload saved plans when auth state changes (login/logout)
+  const migrationDoneRef = useRef(false);
+  useEffect(() => {
+    if (user) {
+      if (!migrationDoneRef.current) {
+        migrationDoneRef.current = true;
+        migrateLocalPlans()
+          .finally(() => {
+            store.list().then(setSavedPlans).catch(() => setSavedPlans([]));
+          });
+      } else {
+        store.list().then(setSavedPlans).catch(() => setSavedPlans([]));
+      }
+    } else {
+      migrationDoneRef.current = false;
+      store.list().then(setSavedPlans).catch(() => setSavedPlans([]));
+    }
+  }, [store, user]);
 
   const busy = loading || analyzing;
   useEffect(() => {
@@ -238,8 +266,13 @@ export default function Redesign() {
     generateFor(last.role, last.userSkills, last.targetRole);
   }
 
-  function handleSavePlan() {
+  async function handleSavePlan() {
     if (!result) return;
+    if (!user) {
+      setLoginError(null);
+      setShowLoginModal(true);
+      return;
+    }
     const last = lastRequestRef.current;
     const plan: SavedPlan = {
       id: makePlanId(),
@@ -250,10 +283,48 @@ export default function Redesign() {
       user_skills: last?.userSkills,
       result,
     };
-    savedPlansStore.save(plan);
-    setSavedPlans(savedPlansStore.list());
-    setSavedFlash(true);
-    setTimeout(() => setSavedFlash(false), 2000);
+    try {
+      await store.save(plan);
+      setSavedPlans(await store.list());
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 2000);
+    } catch {
+      setError("Could not save plan. Please try again.");
+    }
+  }
+
+  async function handleModalLogin(e: FormEvent) {
+    e.preventDefault();
+    setLoginError(null);
+    setLoginLoading(true);
+    try {
+      await authLogin(loginEmail, loginPassword);
+      setShowLoginModal(false);
+      setLoginEmail("");
+      setLoginPassword("");
+      // Token is now set — save the plan via API store directly
+      if (result) {
+        const last = lastRequestRef.current;
+        const plan: SavedPlan = {
+          id: makePlanId(),
+          saved_at: new Date().toISOString(),
+          role: last?.role ?? result.role,
+          target_role: result.target_role ?? null,
+          age: age ? Number(age) : null,
+          user_skills: last?.userSkills,
+          result,
+        };
+        const apiStore = getStore(true);
+        await apiStore.save(plan);
+        setSavedPlans(await apiStore.list());
+        setSavedFlash(true);
+        setTimeout(() => setSavedFlash(false), 2000);
+      }
+    } catch (err) {
+      setLoginError(err instanceof ApiError ? err.message : "Login failed. Please try again.");
+    } finally {
+      setLoginLoading(false);
+    }
   }
 
   function handleOpenPlan(plan: SavedPlan) {
@@ -277,15 +348,19 @@ export default function Redesign() {
     setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
   }
 
-  function handleDeletePlan(id: string) {
-    savedPlansStore.remove(id);
-    setSavedPlans(savedPlansStore.list());
+  async function handleDeletePlan(id: string) {
+    try {
+      await store.remove(id);
+      setSavedPlans(await store.list());
+    } catch {
+      setError("Could not delete plan. Please try again.");
+    }
   }
 
   return (
     <>
       {/* Hero / Input */}
-      <section className="hero" style={{ padding: "4rem 0 3rem" }}>
+      <section className="hero" style={{ padding: "4rem 0 3rem", overflow: "visible" }}>
         <div className="container" style={{ position: "relative", zIndex: 2, textAlign: "center" }}>
           <span className="badge" style={{ marginBottom: "1rem" }}>AI Career Redesign</span>
           <h1 style={{ fontSize: "2.6rem", fontWeight: 900, marginBottom: "1rem" }}>
@@ -509,7 +584,14 @@ export default function Redesign() {
       {savedPlans.length > 0 && (
         <div className="container" style={{ paddingTop: "0.5rem" }}>
           <div className="card" style={{ background: "var(--bg-subtle)" }}>
-            <strong style={{ fontSize: "0.95rem" }}>Your saved plans</strong>
+            <div className="row-between" style={{ flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
+              <strong style={{ fontSize: "0.95rem" }}>Your saved plans</strong>
+              {!user && (
+                <span className="muted" style={{ fontSize: "0.8rem" }}>
+                  <Link to="/login" style={{ color: "var(--purple-600)", fontWeight: 600 }}>Sign in</Link> to access your plans on any device
+                </span>
+              )}
+            </div>
             <div className="stack" style={{ marginTop: "0.5rem" }}>
               {savedPlans.map(p => (
                 <div key={p.id} className="row-between" style={{ flexWrap: "wrap", gap: "0.5rem" }}>
@@ -701,6 +783,56 @@ export default function Redesign() {
           </>
         )}
       </div>
+
+      {/* Login modal — shown when anonymous user tries to save */}
+      {showLoginModal && (
+        <div className="modal-overlay" onClick={() => setShowLoginModal(false)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
+            <div className="modal-header">
+              <strong style={{ fontSize: "1.1rem" }}>Log in to save your plan</strong>
+              <p className="muted" style={{ fontSize: "0.85rem", margin: "0.3rem 0 0" }}>
+                Your saved plans stay with your account, so you can access them on any device.
+              </p>
+            </div>
+            <form onSubmit={handleModalLogin}>
+              <div className="modal-body stack">
+                {loginError && <div className="notice notice-error">{loginError}</div>}
+                <div className="field">
+                  <label htmlFor="modal-email">Email</label>
+                  <input
+                    id="modal-email"
+                    type="email"
+                    value={loginEmail}
+                    onChange={e => setLoginEmail(e.target.value)}
+                    required
+                    autoFocus
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="modal-password">Password</label>
+                  <input
+                    id="modal-password"
+                    type="password"
+                    value={loginPassword}
+                    onChange={e => setLoginPassword(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="modal-footer" style={{ flexDirection: "column", gap: "0.75rem" }}>
+                <button type="submit" className="btn btn-primary btn-block" disabled={loginLoading}>
+                  {loginLoading ? "Logging in…" : "Log in & save"}
+                </button>
+                <div style={{ textAlign: "center", fontSize: "0.85rem" }}>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowLoginModal(false)}>Cancel</button>
+                  <span className="muted" style={{ margin: "0 0.5rem" }}>·</span>
+                  <Link to="/register" onClick={() => setShowLoginModal(false)} style={{ color: "var(--purple-600)", fontWeight: 600 }}>Create account</Link>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -971,7 +1103,7 @@ function SuggestionCard({ suggestion, role, targetRole }: {
           <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>
             Thanks — your feedback is shaping future suggestions.
           </p>
-        ) : fbState === "comment" ? (
+        ) : fbState === "comment" || fbState === "sending" ? (
           <div>
             <textarea
               value={fbComment}
@@ -979,6 +1111,7 @@ function SuggestionCard({ suggestion, role, targetRole }: {
               placeholder="Optional: what didn't feel right? (e.g. too technical, not my industry…)"
               rows={2}
               style={{ width: "100%", fontSize: "0.85rem", marginBottom: "0.5rem" }}
+              disabled={fbState === "sending"}
             />
             <div className="row" style={{ gap: "0.4rem" }}>
               <button
@@ -994,11 +1127,11 @@ function SuggestionCard({ suggestion, role, targetRole }: {
         ) : (
           <div className="row" style={{ gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
             <span className="muted" style={{ fontSize: "0.85rem" }}>Was this option helpful?</span>
-            <button className="btn btn-ghost btn-sm" disabled={fbState === "sending"} onClick={() => sendFeedback("helpful")}>
-              👍 Helpful
+            <button className="btn btn-ghost btn-sm" onClick={() => sendFeedback("helpful")} title="Helpful" style={{ fontSize: "1rem", color: "var(--ink-900)" }}>
+              ✓
             </button>
-            <button className="btn btn-ghost btn-sm" disabled={fbState === "sending"} onClick={() => setFbState("comment")}>
-              👎 Doesn't feel right for my role
+            <button className="btn btn-ghost btn-sm" onClick={() => setFbState("comment")} title="Doesn't feel right for my role" style={{ fontSize: "1rem", color: "var(--ink-900)" }}>
+              ✕
             </button>
           </div>
         )}
@@ -1025,9 +1158,10 @@ function CourseMatch({ match }: { match: RedesignResult["suggestions"][0]["match
         </span>
       </div>
 
-      {/* Matched skills */}
+      {/* Covers — upskilling areas this course addresses */}
       {matched_skills.length > 0 && (
-        <div className="tags" style={{ marginBottom: "0.5rem" }}>
+        <div className="tags" style={{ marginBottom: "0.5rem", alignItems: "center" }}>
+          <span className="muted" style={{ fontSize: "0.75rem" }}>Covers:</span>
           {matched_skills.map((s, i) => (
             <span key={i} className="badge badge-success" style={{ fontSize: "0.7rem" }}>{s}</span>
           ))}

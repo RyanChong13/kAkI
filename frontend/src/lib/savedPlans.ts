@@ -1,16 +1,21 @@
 /**
- * Saved plans store (Phase 3).
+ * Saved plans store (Phase 3 → Phase 5).
  *
- * Currently persists bookmarks to localStorage (device-only).  The
- * `SavedPlansStore` interface is deliberately storage-agnostic so that
- * when user accounts are introduced, the localStorage implementation can
- * be swapped for an API-backed store without touching any UI code —
- * each plan already carries a stable id and timestamp.
+ * Supports two backends:
+ *  - localStorage (anonymous users — device-only bookmarks)
+ *  - API (logged-in users — plans persist per user account)
+ *
+ * The `SavedPlansStore` interface is async so both backends share the
+ * same shape.  `getStore(isLoggedIn)` returns the right implementation.
+ *
+ * `migrateLocalPlans()` moves any localStorage plans to the server
+ * the first time a user logs in, then clears localStorage.
  */
+import { api } from "../api/client";
 import type { RedesignResult } from "../types";
 
 export interface SavedPlan {
-  /** Stable id (survives a future move to server-side storage). */
+  /** Stable id (localStorage: client-generated; API: stringified server id). */
   id: string;
   saved_at: string; // ISO timestamp
   // Request context — lets the user regenerate this exact plan later.
@@ -23,15 +28,17 @@ export interface SavedPlan {
 }
 
 export interface SavedPlansStore {
-  list(): SavedPlan[];
-  save(plan: SavedPlan): void;
-  remove(id: string): void;
+  list(): Promise<SavedPlan[]>;
+  save(plan: SavedPlan): Promise<SavedPlan>;
+  remove(id: string): Promise<void>;
 }
 
 const STORAGE_KEY = "nexa_saved_plans";
 const MAX_PLANS = 20;
 
-function load(): SavedPlan[] {
+// ── localStorage backend (anonymous) ──────────────────────────────────────────
+
+function loadLocal(): SavedPlan[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
@@ -42,7 +49,7 @@ function load(): SavedPlan[] {
   }
 }
 
-function persist(plans: SavedPlan[]) {
+function persistLocal(plans: SavedPlan[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(plans.slice(0, MAX_PLANS)));
   } catch {
@@ -55,18 +62,91 @@ export function makePlanId(): string {
 }
 
 const localStorageStore: SavedPlansStore = {
-  list() {
-    // newest first
-    return load().sort((a, b) => b.saved_at.localeCompare(a.saved_at));
+  async list() {
+    return loadLocal().sort((a, b) => b.saved_at.localeCompare(a.saved_at));
   },
-  save(plan) {
-    const plans = load().filter((p) => p.id !== plan.id);
+  async save(plan) {
+    const plans = loadLocal().filter((p) => p.id !== plan.id);
     plans.unshift(plan);
-    persist(plans);
+    persistLocal(plans);
+    return plan;
   },
-  remove(id) {
-    persist(load().filter((p) => p.id !== id));
+  async remove(id) {
+    persistLocal(loadLocal().filter((p) => p.id !== id));
   },
 };
 
-export const savedPlansStore: SavedPlansStore = localStorageStore;
+// ── API backend (logged-in) ───────────────────────────────────────────────────
+
+interface SavedRedesignAPI {
+  id: number;
+  client_id: string;
+  role: string;
+  target_role: string;
+  age: number | null;
+  user_skills: string[];
+  result: RedesignResult;
+  created_at: string;
+}
+
+function apiPlanToSavedPlan(r: SavedRedesignAPI): SavedPlan {
+  return {
+    id: String(r.id),
+    saved_at: r.created_at,
+    role: r.role,
+    target_role: r.target_role || null,
+    age: r.age,
+    user_skills: r.user_skills,
+    result: r.result,
+  };
+}
+
+const apiStore: SavedPlansStore = {
+  async list() {
+    const rows = await api.get<SavedRedesignAPI[]>("/api/saved-redesigns");
+    return rows.map(apiPlanToSavedPlan);
+  },
+  async save(plan) {
+    const row = await api.post<SavedRedesignAPI>("/api/saved-redesigns", {
+      client_id: plan.id,
+      role: plan.role,
+      target_role: plan.target_role ?? "",
+      age: plan.age ?? null,
+      user_skills: plan.user_skills ?? [],
+      result: plan.result,
+    });
+    return apiPlanToSavedPlan(row);
+  },
+  async remove(id) {
+    await api.del(`/api/saved-redesigns/${parseInt(id, 10)}`);
+  },
+};
+
+// ── Factory ───────────────────────────────────────────────────────────────────
+
+export function getStore(loggedIn: boolean): SavedPlansStore {
+  return loggedIn ? apiStore : localStorageStore;
+}
+
+// ── Migration (localStorage → server on first login) ──────────────────────────
+
+export async function migrateLocalPlans(): Promise<void> {
+  const localPlans = loadLocal();
+  if (localPlans.length === 0) return;
+  for (const plan of localPlans) {
+    try {
+      await api.post("/api/saved-redesigns", {
+        client_id: plan.id,
+        role: plan.role,
+        target_role: plan.target_role ?? "",
+        age: plan.age ?? null,
+        user_skills: plan.user_skills ?? [],
+        result: plan.result,
+      });
+    } catch {
+      // best-effort — skip plans that fail to upload
+    }
+  }
+  // Clear localStorage after migration
+  localStorage.removeItem(STORAGE_KEY);
+}

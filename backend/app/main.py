@@ -8,7 +8,7 @@ from app.config import get_settings
 from app.database import Base, SessionLocal, engine
 from app.models import User, UserRole
 from app.auth import hash_password
-from app.routers import auth, courses, redesign
+from app.routers import auth, courses, redesign, saved_redesigns
 from app.scheduler import initial_refresh, start_scheduler
 
 logging.basicConfig(level=logging.INFO)
@@ -68,6 +68,7 @@ app.add_middleware(
 app.include_router(redesign.router)
 app.include_router(auth.router)
 app.include_router(courses.router)
+app.include_router(saved_redesigns.router)
 
 
 @app.get("/api/health")

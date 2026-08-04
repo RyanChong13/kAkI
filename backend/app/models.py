@@ -6,6 +6,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     Float,
+    ForeignKey,
     Integer,
     String,
     Text,
@@ -101,20 +102,19 @@ class SuggestionFeedback(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-# ── Community Insights (Phase 4 — anonymized, opt-in) ────────────────────────
+# ── Saved Redesign Plans (Phase 5 — per-user persistence) ──────────────────────
 
-class RedesignInsight(Base):
-    """Anonymized record of a redesign generation — powers community benchmarking.
-
-    No user identifiers are stored.  Only the role, optional target role,
-    and the sector category are recorded so that aggregate trends can be
-    shown ("how others in your role are redesigning").
-    """
-    __tablename__ = "redesign_insights"
+class SavedRedesign(Base):
+    """A redesign result saved by a logged-in user."""
+    __tablename__ = "saved_redesigns"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    current_role: Mapped[str] = mapped_column(String(255), index=True)
-    current_sector: Mapped[str] = mapped_column(String(120), default="", index=True)
-    target_role: Mapped[str] = mapped_column(String(255), default="", index=True)
-    target_sector: Mapped[str] = mapped_column(String(120), default="")
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    # Client-side stable id (preserved during localStorage → server migration)
+    client_id: Mapped[str] = mapped_column(String(64), default="")
+    role: Mapped[str] = mapped_column(String(255))
+    target_role: Mapped[str] = mapped_column(String(255), default="")
+    age: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    user_skills: Mapped[str] = mapped_column(Text, default="")  # JSON array
+    result_json: Mapped[str] = mapped_column(Text)  # full RedesignResult as JSON
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
