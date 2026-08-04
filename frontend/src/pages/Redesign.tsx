@@ -59,6 +59,8 @@ export default function Redesign() {
   const [result, setResult] = useState<RedesignResult | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Incremented on mode switch so in-flight API calls can bail out
+  const modeEpochRef = useRef(0);
 
   // Saved plans (Phase 3 — device bookmarks now; moves to user accounts later)
   const [savedPlans, setSavedPlans] = useState<SavedPlan[]>([]);
@@ -67,6 +69,8 @@ export default function Redesign() {
   const lastRequestRef = useRef<{ role: string; userSkills?: string[]; targetRole?: string } | null>(null);
   // Staged loading messages (reduce anxiety during long AI calls)
   const [stageIdx, setStageIdx] = useState(0);
+  // Result tab — "matches" (resume analysis) vs "plan" (redesign/transition)
+  const [resultTab, setResultTab] = useState<"matches" | "plan">("matches");
 
   useEffect(() => {
     api.get<RoleListResponse>("/api/roles")
@@ -121,6 +125,7 @@ export default function Redesign() {
 
   function generateFor(roleTitle: string, userSkills?: string[], targetRole?: string) {
     if (!roleTitle.trim()) return;
+    const epoch = modeEpochRef.current;
     setLoading(true);
     setError(null);
     setResult(null);
@@ -141,14 +146,19 @@ export default function Redesign() {
 
     api.post<RedesignResult>("/api/redesign", body)
       .then(res => {
+        if (epoch !== modeEpochRef.current) return;
         setResult(res);
+        setResultTab("plan");
         setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
       })
       .catch((err: unknown) => {
+        if (epoch !== modeEpochRef.current) return;
         const msg = err instanceof ApiError ? err.message : "Something went wrong. Please try again.";
         setError(msg);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (epoch === modeEpochRef.current) setLoading(false);
+      });
   }
 
   function handleGenerate() {
@@ -180,6 +190,7 @@ export default function Redesign() {
 
   async function handleAnalyze() {
     if (!resumeFile) return;
+    const epoch = modeEpochRef.current;
     setAnalyzing(true);
     setError(null);
     setResult(null);
@@ -189,22 +200,26 @@ export default function Redesign() {
     form.append("file", resumeFile);
     try {
       const res = await api.postForm<ResumeAnalysis>("/api/resume/analyze", form);
+      if (epoch !== modeEpochRef.current) return;
       setAnalysis(res);
+      setResultTab("matches");
       // If the user picked a target role, go straight to a transition plan
       const target = wantTarget ? targetInput.trim() : "";
       if (target && res.current_role_guess) {
         generateFor(res.current_role_guess, res.skills, target);
       }
     } catch (err) {
+      if (epoch !== modeEpochRef.current) return;
       const msg = err instanceof ApiError ? err.message : "Something went wrong. Please try again.";
       setError(msg);
     } finally {
-      setAnalyzing(false);
+      if (epoch === modeEpochRef.current) setAnalyzing(false);
     }
   }
 
   function handleCareerSelect(match: CareerMatch) {
     setRoleInput(match.role_title);
+    setResultTab("plan");
     const current = analysis?.current_role_guess?.trim();
     if (current && current.toLowerCase() !== match.role_title.toLowerCase()) {
       // Transition plan: detected current role → this career
@@ -219,6 +234,7 @@ export default function Redesign() {
   function handleRegenerate() {
     const last = lastRequestRef.current;
     if (!last) return;
+    setResultTab("plan");
     generateFor(last.role, last.userSkills, last.targetRole);
   }
 
@@ -244,6 +260,7 @@ export default function Redesign() {
     setResult(plan.result);
     setAnalysis(null);
     setError(null);
+    setResultTab("plan");
     setRoleInput(plan.role);
     if (plan.target_role) {
       setWantTarget(true);
@@ -283,13 +300,38 @@ export default function Redesign() {
           <div className="row" style={{ justifyContent: "center", gap: "0.5rem", marginBottom: "1.5rem" }}>
             <button
               className={`btn ${mode === "role" ? "btn-primary" : "btn-ghost"}`}
-              onClick={() => setMode("role")}
+              onClick={() => {
+                modeEpochRef.current++;
+                setMode("role");
+                setAnalysis(null);
+                setResult(null);
+                setResumeFile(null);
+                setTargetInput("");
+                setWantTarget(false);
+                setAge("");
+                setError(null);
+                setFunding(null);
+                setLoading(false);
+                setAnalyzing(false);
+              }}
             >
               Type your role
             </button>
             <button
               className={`btn ${mode === "resume" ? "btn-primary" : "btn-ghost"}`}
-              onClick={() => setMode("resume")}
+              onClick={() => {
+                modeEpochRef.current++;
+                setMode("resume");
+                setResult(null);
+                setRoleInput("");
+                setTargetInput("");
+                setWantTarget(false);
+                setAge("");
+                setError(null);
+                setFunding(null);
+                setLoading(false);
+                setAnalyzing(false);
+              }}
             >
               Upload resume
             </button>
@@ -497,21 +539,33 @@ export default function Redesign() {
         </div>
       )}
 
-      {/* Loading hint (redesign generation) — staged messages */}
-      {loading && (
-        <div className="container" style={{ textAlign: "center", padding: "2rem 0" }}>
-          <div className="row" style={{ justifyContent: "center", gap: "0.6rem" }}>
-            <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />
-            <p className="muted" style={{ margin: 0 }}>{stageMsg}</p>
+      {/* Results — tabbed when both analysis and plan exist */}
+      <div ref={resultsRef}>
+        {/* Tab bar */}
+        {analysis && (result || loading) && (
+          <div className="container" style={{ paddingTop: "1rem" }}>
+            <div className="row" style={{ gap: "0.5rem" }}>
+              <button
+                className={`btn ${resultTab === "matches" ? "btn-primary" : "btn-ghost"}`}
+                onClick={() => setResultTab("matches")}
+              >
+                Careers that suit you
+              </button>
+              <button
+                className={`btn ${resultTab === "plan" ? "btn-primary" : "btn-ghost"}`}
+                onClick={() => setResultTab("plan")}
+              >
+                {result?.target_role ? "Transition plan" : "Your plan"}
+                {loading && resultTab !== "plan" && (
+                  <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2, marginLeft: "0.4rem", display: "inline-block", verticalAlign: "middle" }} />
+                )}
+              </button>
+            </div>
           </div>
-          <p className="muted" style={{ marginTop: "0.5rem", fontSize: "0.8rem" }}>
-            This usually takes 20–40 seconds.
-          </p>
-        </div>
-      )}
+        )}
 
-      {/* Resume analysis results */}
-      {analysis && (
+        {/* Matches tab */}
+        {analysis && (resultTab === "matches" || (!result && !loading)) && (
         <div className="container page" style={{ paddingTop: "1rem" }}>
           <div className="card" style={{ marginBottom: "1.5rem" }}>
             <div className="row-between" style={{ marginBottom: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
@@ -570,11 +624,23 @@ export default function Redesign() {
             ))}
           </div>
         </div>
-      )}
+        )}
 
-      {/* Redesign results */}
-      <div ref={resultsRef}>
-        {result && (
+        {/* Plan tab */}
+        {(result || loading) && (!analysis || resultTab === "plan") && (
+          <>
+            {loading && (
+              <div className="container" style={{ textAlign: "center", padding: "2rem 0" }}>
+                <div className="row" style={{ justifyContent: "center", gap: "0.6rem" }}>
+                  <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />
+                  <p className="muted" style={{ margin: 0 }}>{stageMsg}</p>
+                </div>
+                <p className="muted" style={{ marginTop: "0.5rem", fontSize: "0.8rem" }}>
+                  This usually takes 20–40 seconds.
+                </p>
+              </div>
+            )}
+            {result && (
           <div className="container page" style={{ paddingTop: "1rem" }}>
             {/* Role header */}
             <div style={{ marginBottom: "2rem" }}>
@@ -631,6 +697,8 @@ export default function Redesign() {
               — schemes change with each national Budget.
             </div>
           </div>
+            )}
+          </>
         )}
       </div>
     </>
