@@ -99,3 +99,22 @@ class SuggestionFeedback(Base):
     rating: Mapped[str] = mapped_column(String(20), index=True)  # "helpful" | "not_right"
     comment: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+# ── Community Insights (Phase 4 — anonymized, opt-in) ────────────────────────
+
+class RedesignInsight(Base):
+    """Anonymized record of a redesign generation — powers community benchmarking.
+
+    No user identifiers are stored.  Only the role, optional target role,
+    and the sector category are recorded so that aggregate trends can be
+    shown ("how others in your role are redesigning").
+    """
+    __tablename__ = "redesign_insights"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    current_role: Mapped[str] = mapped_column(String(255), index=True)
+    current_sector: Mapped[str] = mapped_column(String(120), default="", index=True)
+    target_role: Mapped[str] = mapped_column(String(255), default="", index=True)
+    target_sector: Mapped[str] = mapped_column(String(120), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
